@@ -35,14 +35,14 @@ func main() {
 
 	for i := 1; i <= requests; i++ {
 		time.Sleep(50 * time.Millisecond)
-		text := "Request-" + strconv.Itoa(i)
+		text := "Request-" + strconv.Itoa(i) + "\n"
 		fmt.Fprintf(c, text+"\n")
 		message, sendErr := bufio.NewReader(c).ReadString('\n')
 		if sendErr != nil {
 			fmt.Println("Connection is broken. Exiting...")
 			return
 		}
-		fmt.Print("->: " + message)
+		fmt.Print("->: " + text + " - " + message)
 		if strings.TrimSpace(string(text)) == "STOP" {
 			fmt.Println("TCP client exiting...")
 			return
