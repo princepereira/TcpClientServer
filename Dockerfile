@@ -5,4 +5,4 @@ RUN setx /M PATH "%PATH%;C:/"
 COPY ./bins/client.exe ./
 COPY ./bins/server.exe ./
 EXPOSE 4444
-ENTRYPOINT ["server.exe", "4444"]
+ENTRYPOINT ["server.exe", "-p", "4444"]

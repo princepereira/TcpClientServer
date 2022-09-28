@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"princepereira/TcpClientServer/util"
 	"strings"
 	"time"
 )
@@ -36,22 +37,30 @@ func getIPAddress() string {
 
 func main() {
 
-	arguments := os.Args
-	if len(arguments) == 1 {
-		fmt.Println("Please provide port number")
-		fmt.Println("Eg: server 889")
+	args, err := util.ValidateArgs()
+	if err != nil {
+		util.Help()
+		fmt.Println(err)
 		return
 	}
 
-	PORT := ":" + arguments[1]
+	if args[util.AtribHelp] == "true" {
+		util.Help()
+		return
+	}
+
+	clientName := getIPAddress()
+
+	args["client"] = clientName
+	util.PrintServerBanner(args)
+
+	PORT := ":" + args[util.AtribPort]
 	l, err := net.Listen("tcp", PORT)
 	if err != nil {
 		fmt.Println("Failed to start server port : ", PORT)
 		fmt.Println(err)
 		return
 	}
-
-	clientName := getIPAddress()
 
 	fmt.Println("Server started on port : ", PORT)
 
