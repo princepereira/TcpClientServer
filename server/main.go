@@ -4,52 +4,26 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"os"
 	"princepereira/TcpClientServer/util"
 	"strings"
 	"time"
 )
 
-func getIPAddress() string {
-
-	client := "Client : "
-
-	name, err := os.Hostname()
-	if err != nil {
-		fmt.Printf("Oops: %v\n", err)
-		return ""
-	}
-
-	client = client + name
-
-	addrs, err := net.LookupHost(name)
-	if err != nil {
-		fmt.Printf("Oops: %v\n", err)
-		return ""
-	}
-
-	for _, a := range addrs {
-		client = client + " - " + a
-	}
-
-	return client
-}
-
 func main() {
 
 	args, err := util.ValidateArgs()
 	if err != nil {
-		util.Help()
+		util.ServerHelp()
 		fmt.Println(err)
 		return
 	}
 
 	if args[util.AtribHelp] == "true" {
-		util.Help()
+		util.ServerHelp()
 		return
 	}
 
-	clientName := getIPAddress()
+	clientName := util.GetIPAddress("Server - ")
 
 	args["client"] = clientName
 	util.PrintServerBanner(args)

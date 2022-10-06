@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -86,9 +87,13 @@ func ValidateArgs() (map[string]string, error) {
 	return args, nil
 }
 
-func ValidateValues(args map[string]string) error {
+func ValidateValues(cs string, args map[string]string) error {
 	if len(args) != 5 {
-		Help()
+		if cs == "client" {
+			ClientHelp()
+		} else {
+			ServerHelp()
+		}
 		return fmt.Errorf("no sufficient args")
 	}
 	if _, err := strconv.Atoi(args[AtribPort]); err != nil {
@@ -106,13 +111,41 @@ func ValidateValues(args map[string]string) error {
 	return nil
 }
 
-func Help() {
-	str := "#=========== Client ===========#\n"
+func ClientHelp() {
+	str := "\n#==============================#\n\n"
 	str = str + "Format : .\\client.exe -i <IP> -p <Port> -c <Number of Connections> -r <Number of Requests/Connection> -d <Delay (in ms) between each request> \n"
 	str = str + "Eg : .\\client.exe -i 127.0.0.1 -p 4444 -c 10 -r 10 -d 50 \n"
-	str = str + "\n#=========== Server ===========#\n"
+	str = str + "\n#==============================#\n"
+	fmt.Println(str)
+}
+
+func ServerHelp() {
+	str := "\n#==============================#\n\n"
 	str = str + "Format : .\\server.exe -p <Port> \n"
 	str = str + "Server Eg : .\\server.exe -p 4444 \n"
-	str = str + "\n#==============================#"
+	str = str + "\n#==============================#\n"
 	fmt.Println(str)
+}
+
+func GetIPAddress(str string) string {
+
+	name, err := os.Hostname()
+	if err != nil {
+		fmt.Printf("Oops: %v\n", err)
+		return ""
+	}
+
+	client := str + name
+
+	addrs, err := net.LookupHost(name)
+	if err != nil {
+		fmt.Printf("Oops: %v\n", err)
+		return ""
+	}
+
+	for _, a := range addrs {
+		client = client + " - " + a
+	}
+
+	return client
 }
