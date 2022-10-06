@@ -1,23 +1,44 @@
 # Some set of commands
 
 
+#### Make Client: 
+```
+go build -o .\bins\client.exe .\client\
 ```
 
-Make Client: go build -o .\bins\client.exe .\client\
+#### Make Server: 
+```
+go build -o .\bins\server.exe .\server\
+```
 
-Make Server: go build -o .\bins\server.exe .\server\
+#### Make Docker: 
+```
+docker build -t tcp-client-server .
+```
 
-Make Docker: docker build -t tcp-client-server .
+#### Tag Docker: 
+```
+docker tag tcp-client-server princepereira/tcp-client-server
+```
 
-Tag Docker: docker tag tcp-client-server princepereira/tcp-client-server
+#### Push Docker: 
+```
+docker push princepereira/tcp-client-server
+```
 
-Push Docker: docker push princepereira/tcp-client-server
+#### Pull Docker: 
+```
+docker pull princepereira/tcp-client-server
+```
 
-Pull Docker: docker pull princepereira/tcp-client-server
+#### Run Server: 
+```
+.\server.exe -p 4444
+```
 
-Run Server: .\server.exe -p 4444
-
-Run Client: .\client.exe -i 127.0.0.1 -p 4444 -c 10 -r 10 -d 50
+#### Run Client: 
+```
+.\client.exe -i 127.0.0.1 -p 4444 -c 10 -r 10 -d 50
 
 ```
 
