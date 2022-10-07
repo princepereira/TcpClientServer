@@ -54,7 +54,7 @@ func main() {
 
 	// Setting up connections
 	for i := 1; i <= conns; i++ {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 
 		c, err := net.Dial("tcp", CONNECT)
 		clientName := "Client-" + strconv.Itoa(i)
@@ -69,7 +69,7 @@ func main() {
 		}
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(3 * time.Second)
 
 	wg.Add(conns - len(failedCons))
 
