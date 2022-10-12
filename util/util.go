@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	Version = "v28.09.2022"
+	Version        = "v28.09.2022"
+	MaxDropPackets = 100
 )
 
 const (

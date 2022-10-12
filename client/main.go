@@ -90,12 +90,12 @@ func main() {
 	fmt.Println("\n\nAll the connections are closed. Exiting TCP Client ...")
 }
 
-func exitClient(clientName, reason string, i int) {
+func exitClient(clientName, reason string, i, packetsDropped int) {
 	t := time.Now()
 	myTime := t.Format(time.RFC3339) + "\n"
 	server := serverDetails[clientName]
 	failedCons = append(failedCons, clientName+" Iteration : "+strconv.Itoa(i)+" Server Details : "+server+" Time : "+myTime)
-	fmt.Println(clientName + " " + reason + " Exiting... " + myTime)
+	fmt.Println(clientName + " " + reason + " Exiting... " + myTime + " Packets dropped : " + strconv.Itoa(packetsDropped))
 }
 
 func startClient(clientName string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
@@ -106,25 +106,34 @@ func startClient(clientName string, c net.Conn, args map[string]string, wg *sync
 	requests, _ := strconv.Atoi(args[util.AtribReqs])
 	delay, _ := strconv.Atoi(args[util.AtribDelay])
 
+	dropCounter, resetCounter := 0, 0
+
 	for i := 1; i <= requests; i++ {
 		time.Sleep(time.Duration(delay) * time.Millisecond)
 		text := clientName + " - Request-" + strconv.Itoa(i) + "\n"
 		fmt.Fprintf(c, text+"\n")
 		message, sendErr := bufio.NewReader(c).ReadString('\n')
 		if sendErr != nil {
-			exitClient(clientName, "connection is broken.", i)
-			return
+			dropCounter++
+			resetCounter++
+			fmt.Println("Packet dropped with ", clientName, " request : ", i)
+			if resetCounter == util.MaxDropPackets {
+				exitClient(clientName, "connection is broken.", i, dropCounter)
+				return
+			}
+		} else {
+			resetCounter = 0
 		}
 		if ctx.Err() != nil {
-			exitClient(clientName, "is cancelled by ctl + c.", i)
+			exitClient(clientName, "is cancelled by ctl + c.", i, dropCounter)
 			return
 		}
 		if i == 1 {
+			// Just storing the information
 			serverDetails[clientName] = message
 		}
 		fmt.Print("->: " + text + " - " + message)
 	}
-
 }
 
 func handleCtrlC(c chan os.Signal, cancel context.CancelFunc) {
