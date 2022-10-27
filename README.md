@@ -16,19 +16,45 @@ go build -o .\bins\server.exe .\server\
 docker build -t tcp-client-server .
 ```
 
+For other dockerfiles, copy the corresponding docker images to root directory, then
+```
+cp -Force .\dockerfiles\Dockerfile.WindowsServer2022 Dockerfile
+docker build -t tcp-client-server:WindowsServer2022 .
+
+or
+
+cp -Force .\dockerfiles\Dockerfile.Windows2022 Dockerfile
+docker build -t tcp-client-server:Windows2022 .
+```
+
 #### Tag Docker: 
 ```
 docker tag tcp-client-server princepereira/tcp-client-server
+```
+For other dockerfiles
+```
+docker tag tcp-client-server:Windows2022 princepereira/tcp-client-server:Windows2022
+docker tag tcp-client-server:WindowsServer2022 princepereira/tcp-client-server:WindowsServer2022
 ```
 
 #### Push Docker: 
 ```
 docker push princepereira/tcp-client-server
 ```
+For other dockerfiles
+```
+docker push princepereira/tcp-client-server:Windows2022
+docker push princepereira/tcp-client-server:WindowsServer2022
+```
 
 #### Pull Docker: 
 ```
 docker pull princepereira/tcp-client-server
+```
+For other dockerfiles
+```
+docker pull princepereira/tcp-client-server:Windows2022
+docker pull princepereira/tcp-client-server:WindowsServer2022
 ```
 
 #### Run Server: 
