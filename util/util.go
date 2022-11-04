@@ -44,6 +44,7 @@ const (
 	ConstTrue               = "true"
 	ConstTCP                = "tcp"
 	ConstUDP                = "udp"
+	ConstAll                = "all"
 	DefaultProto            = ConstTCP
 	DefaultDisableKeepAlive = ConstFalse
 	DefaultTimeoutKeepAlive = "15000"
@@ -54,8 +55,15 @@ func PrintServerBanner(config map[string]string) {
 	log.Println("#===========================================#")
 	log.Println("#         Title       : TCP Server          ")
 	log.Printf("#         Version     : %s          \n", Version)
-	log.Printf("#         Port        : %s               \n", config[AtribPort])
 	log.Printf("#         Proto       : %s        \n", config[AtribProto])
+	if config[AtribProto] == ConstAll {
+		log.Printf("#         TcpPort     : %s               \n", config[AtribPort])
+		port, _ := strconv.Atoi(config[AtribPort])
+		port++
+		log.Printf("#         UdpPort     : %s               \n", strconv.Itoa(port))
+	} else {
+		log.Printf("#         Port        : %s               \n", config[AtribPort])
+	}
 	log.Printf("#         Server      : %s               \n", config[AtribServerInfo])
 	log.Println("#===========================================#")
 	log.Println(" ")
@@ -70,8 +78,10 @@ func PrintClientBanner(config map[string]string) {
 	log.Printf("#         Connections      : %s                  \n", config[AtribCons])
 	log.Printf("#         Reqs/Cons        : %s                  \n", config[AtribReqs])
 	log.Printf("#         Proto            : %s                  \n", config[AtribProto])
-	log.Printf("#         DisableKeepAlive : %s                  \n", config[AtribDisableKeepAlive])
-	log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
+	if config[AtribProto] == ConstTCP {
+		log.Printf("#         DisableKeepAlive : %s                  \n", config[AtribDisableKeepAlive])
+		log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
+	}
 	log.Println("#===========================================#")
 	log.Println(" ")
 }
@@ -118,7 +128,10 @@ func isValidProto(proto string) bool {
 	if proto == ConstTCP {
 		return true
 	}
-	return proto == ConstUDP
+	if proto == ConstUDP {
+		return true
+	}
+	return proto == ConstAll
 }
 
 func isValidBool(val string) bool {
