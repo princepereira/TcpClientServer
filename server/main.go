@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"fmt"
+	"log"
 	"net"
 	"princepereira/TcpClientServer/util"
 	"strings"
@@ -14,60 +14,62 @@ func main() {
 	args, err := util.ValidateArgs()
 	if err != nil {
 		util.ServerHelp()
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
-	if args[util.AtribHelp] == "true" {
+	if args[util.AtribHelp] == util.ConstTrue {
 		util.ServerHelp()
 		return
 	}
 
-	clientName := util.GetIPAddress("Server - ")
+	serverInfo := util.GetIPAddress()
+	args[util.AtribServerInfo] = serverInfo
 
-	args["client"] = clientName
 	util.PrintServerBanner(args)
 
+	proto := args[util.AtribProto]
+
 	PORT := ":" + args[util.AtribPort]
-	l, err := net.Listen("tcp", PORT)
+	l, err := net.Listen(proto, PORT)
 	if err != nil {
-		fmt.Println("Failed to start server port : ", PORT)
-		fmt.Println(err)
+		log.Println("Failed to start server port : ", PORT)
+		log.Println(err)
 		return
 	}
 
-	fmt.Println("Server started on port : ", PORT)
+	log.Println("Server started on port : ", PORT)
 
-	defer fmt.Println("Server stopped ...")
+	defer log.Println("Server stopped ...")
 	defer l.Close()
 
 	for {
 
 		c, err := l.Accept()
 		if err != nil {
-			fmt.Println("ACCEPT is failed : ", PORT)
-			fmt.Println(err)
+			log.Println("ACCEPT is failed : ", PORT)
+			log.Println(err)
 			return
 		}
 
-		fmt.Println("Client Connection Established...")
+		log.Println("Client Connection Established...")
 
 		for {
 
 			netData, err := bufio.NewReader(c).ReadString('\n')
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				break
 			}
 			if strings.TrimSpace(string(netData)) == "STOP" {
-				fmt.Println("Exiting TCP server!")
+				log.Println("Exiting TCP server!")
 				break
 			}
 
-			fmt.Print("-> ", string(netData))
+			log.Print("-> ", string(netData))
 			t := time.Now()
 			myTime := t.Format(time.RFC3339) + "\n"
-			c.Write([]byte(clientName + " \n Time : " + myTime))
+			c.Write([]byte("Server : " + serverInfo + " \n Time : " + myTime))
 		}
 	}
 }
