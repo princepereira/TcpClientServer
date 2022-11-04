@@ -197,7 +197,7 @@ func ServerHelp() {
 	str = str + "\nEg : .\\server.exe -p 4444 \n"
 	str = str + "\nParameters (Optional, Mandatory*): \n\n"
 	str = str + "   -p   : (*) Port number of the server \n"
-	str = str + "   -pr  :     Proto used. Options: TCP/UDP. Default: TCP \n"
+	str = str + "   -pr  :     Proto used. Options: TCP/UDP/All. Default: TCP \n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
 }

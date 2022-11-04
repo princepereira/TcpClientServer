@@ -227,7 +227,7 @@ func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *s
 			log.Printf("Read data failed. Client : %s, Error : %v, Message : %s", clientName, err.Error(), text)
 		}
 
-		log.Println("-> Request send : " + text + " - Response received : " + string(received))
+		log.Print("-> Request send : " + text + " - Response received : " + string(received))
 
 		if ctx.Err() != nil {
 			exitClient(clientName, "is cancelled by ctl + c.", i, 0)
