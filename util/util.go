@@ -7,11 +7,17 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
-	Version        = "v04.11.2022"
-	MaxDropPackets = 100
+	Version                  = "v04.11.2022"
+	MaxDropPackets           = 100
+	KillPort                 = 8090
+	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
+	ErrMsgConnAborted        = "An established connection was aborted"
+	ErrMsgEOF                = "EOF"
+	DialTimeout              = 3 * time.Second
 )
 
 const (

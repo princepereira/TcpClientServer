@@ -2,12 +2,55 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"princepereira/TcpClientServer/util"
 	"strconv"
+	"sync"
 	"time"
 )
+
+type tcpConnStruct struct {
+	conns map[string]net.Conn
+	mutex *sync.Mutex
+}
+
+var tcpConnCache = tcpConnStruct{conns: make(map[string]net.Conn), mutex: &sync.Mutex{}}
+
+func (c tcpConnStruct) add(remoteAdd string, conn net.Conn) {
+	c.mutex.Lock()
+	if prevConn, ok := c.conns[remoteAdd]; ok {
+		prevConn.Close()
+	}
+	c.conns[remoteAdd] = conn
+	c.mutex.Unlock()
+}
+
+func (c tcpConnStruct) remove(remoteAdd string) net.Conn {
+	c.mutex.Lock()
+	conn := c.conns[remoteAdd]
+	delete(c.conns, remoteAdd)
+	c.mutex.Unlock()
+	return conn
+}
+
+func killHandler(w http.ResponseWriter, req *http.Request) {
+	log.Println("Kill handler called...")
+	for remoteAddr, conn := range tcpConnCache.conns {
+		conn.Close()
+		tcpConnCache.remove(remoteAddr)
+	}
+	log.Println("All connections are closed ...")
+	fmt.Fprintf(w, "All connections are killed\n")
+}
+
+func startKillServer() {
+	http.HandleFunc("/kill", killHandler)
+	log.Println("killHandler started on port : ", util.KillPort)
+	http.ListenAndServe(fmt.Sprintf(":%d", util.KillPort), nil)
+}
 
 func main() {
 
@@ -31,6 +74,8 @@ func main() {
 	proto := args[util.AtribProto]
 	address := ":" + args[util.AtribPort]
 
+	go startKillServer()
+
 	switch proto {
 	case util.ConstTCP:
 		invokeTcpServer(proto, address, serverInfo)
@@ -50,7 +95,7 @@ func main() {
 }
 
 func invokeTcpServer(proto, address, serverInfo string) {
-	l, err := net.Listen(proto, address)
+	listener, err := net.Listen(proto, address)
 	if err != nil {
 		log.Println("Failed to start server port : ", address)
 		log.Println(err)
@@ -59,29 +104,32 @@ func invokeTcpServer(proto, address, serverInfo string) {
 
 	log.Println("TCP Server started on port : ", address)
 
-	defer log.Println("Server stopped ...")
-	defer l.Close()
+	defer log.Println("TCP Server stopped ...")
+	defer listener.Close()
 
 	for {
-
-		c, err := l.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Println("ACCEPT is failed : ", address)
 			log.Println(err)
-			return
+			continue
 		}
+		log.Println("TCP Client Connection Established... ", conn.RemoteAddr())
+		conn.Write([]byte(">"))
+		tcpConnCache.add(conn.RemoteAddr().String(), conn)
+		go handleTcpConnection(conn, serverInfo)
+	}
+}
 
-		log.Println("TCP Client Connection Established... ", c.RemoteAddr())
-
-		for {
-			netData, err := bufio.NewReader(c).ReadString('\n')
-			if err != nil {
-				log.Println(err)
-				break
-			}
-			log.Print("-> ", string(netData))
-			c.Write(constructServerResp(serverInfo))
-		}
+func handleTcpConnection(conn net.Conn, serverInfo string) {
+	defer conn.Close()
+	defer tcpConnCache.remove(conn.RemoteAddr().String())
+	defer log.Println("TCP connection gracefully closed for client ", conn.RemoteAddr().String())
+	s := bufio.NewScanner(conn)
+	for s.Scan() {
+		data := s.Text()
+		log.Print("-> ", string(data))
+		conn.Write(constructServerResp(serverInfo))
 	}
 }
 

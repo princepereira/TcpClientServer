@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"princepereira/TcpClientServer/util"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -121,9 +122,16 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 
 	// Setting up connections
 	for i := 1; i <= conns; i++ {
-
+		clientName := "TcpClient-" + strconv.Itoa(i)
 		time.Sleep(2 * time.Second)
-		c, err := net.Dial(proto, address)
+
+		c, err := net.DialTimeout(proto, address, util.DialTimeout)
+		if err != nil {
+			failedCons = append(failedCons, clientName)
+			log.Println("#===== Failed to connect to ", address, " by ", clientName, " ======#")
+			log.Println(err)
+			continue
+		}
 
 		if tc, ok := c.(*net.TCPConn); ok {
 			tc.SetKeepAlive(!disableKeepAlive)
@@ -133,16 +141,8 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 			}
 		}
 
-		clientName := "TcpClient-" + strconv.Itoa(i)
-
-		if err != nil {
-			failedCons = append(failedCons, clientName)
-			log.Println("#===== Failed to connect to ", address, " by ", clientName, " ======#")
-			log.Println(err)
-		} else {
-			log.Println("#===== Tcp Client Connected : ", clientName, " ======#")
-			connMap[clientName] = c
-		}
+		log.Println("#===== Tcp Client Connected : ", clientName, " ======#")
+		connMap[clientName] = c
 	}
 
 	time.Sleep(3 * time.Second)
@@ -179,7 +179,24 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 		text := clientName + " - Request-" + strconv.Itoa(i) + "\n"
 		fmt.Fprintf(c, text+"\n")
 		message, sendErr := bufio.NewReader(c).ReadString('\n')
+		if strings.Contains(message, util.ErrMsgConnAborted) {
+			exitClient(clientName, util.ErrMsgConnAborted, i, dropCounter)
+			return
+		}
 		if sendErr != nil {
+			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
+				exitClient(clientName, sendErr.Error(), i, dropCounter)
+				return
+			}
+			if strings.Contains(sendErr.Error(), util.ErrMsgConnAborted) {
+				exitClient(clientName, sendErr.Error(), i, dropCounter)
+				return
+			}
+			if sendErr.Error() == util.ErrMsgEOF {
+				exitClient(clientName, sendErr.Error(), i, dropCounter)
+				return
+			}
+			log.Println("=====>> Send Error : ", sendErr.Error())
 			dropCounter++
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
