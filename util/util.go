@@ -17,7 +17,12 @@ const (
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
 	ErrMsgConnAborted        = "An established connection was aborted"
 	ErrMsgEOF                = "EOF"
+	ErrMsgListenClosed       = "use of closed network connection"
 	DialTimeout              = 3 * time.Second
+	QuitMsg                  = "Quit Connection"
+	ConnTerminatedSuccessMsg = "#=== Connection graceful exit. "
+	ConnTerminatedFailedMsg  = "#=== Connection failed exit. "
+	ConnTerminatedMsg        = " #=== Connection closed."
 )
 
 const (

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"princepereira/TcpClientServer/util"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,6 +19,8 @@ type tcpConnStruct struct {
 }
 
 var tcpConnCache = tcpConnStruct{conns: make(map[string]net.Conn), mutex: &sync.Mutex{}}
+var listener net.Listener
+var quitServer = make(chan bool)
 
 func (c tcpConnStruct) add(remoteAdd string, conn net.Conn) {
 	c.mutex.Lock()
@@ -38,11 +41,19 @@ func (c tcpConnStruct) remove(remoteAdd string) net.Conn {
 
 func killHandler(w http.ResponseWriter, req *http.Request) {
 	log.Println("Kill handler called...")
+	if listener != nil {
+		listener.Close()
+	}
 	for remoteAddr, conn := range tcpConnCache.conns {
+		conn.Write([]byte(util.QuitMsg))
+		log.Println("Quit message send to ", remoteAddr)
+		time.Sleep(500 * time.Millisecond)
 		conn.Close()
+		log.Println("Connection closed for ", remoteAddr)
 		tcpConnCache.remove(remoteAddr)
 	}
 	log.Println("All connections are closed ...")
+	quitServer <- true
 	fmt.Fprintf(w, "All connections are killed\n")
 }
 
@@ -95,7 +106,8 @@ func main() {
 }
 
 func invokeTcpServer(proto, address, serverInfo string) {
-	listener, err := net.Listen(proto, address)
+	var err error
+	listener, err = net.Listen(proto, address)
 	if err != nil {
 		log.Println("Failed to start server port : ", address)
 		log.Println(err)
@@ -112,6 +124,11 @@ func invokeTcpServer(proto, address, serverInfo string) {
 		if err != nil {
 			log.Println("ACCEPT is failed : ", address)
 			log.Println(err)
+			if strings.Contains(err.Error(), util.ErrMsgListenClosed) {
+				<-quitServer
+				log.Println("Quiting server")
+				return
+			}
 			continue
 		}
 		log.Println("TCP Client Connection Established... ", conn.RemoteAddr())
@@ -119,6 +136,7 @@ func invokeTcpServer(proto, address, serverInfo string) {
 		tcpConnCache.add(conn.RemoteAddr().String(), conn)
 		go handleTcpConnection(conn, serverInfo)
 	}
+
 }
 
 func handleTcpConnection(conn net.Conn, serverInfo string) {
