@@ -1,5 +1,6 @@
-$tag = ":latest"
-# $tag = ":stable"
+# $tag = ":test"
+# $tag = ":latest"
+$tag = ":stable"
 go build -o .\bins\client.exe .\client\
 go build -o .\bins\server.exe .\server\
 docker build -t tcp-client-server .
