@@ -47,11 +47,11 @@ func killHandler(w http.ResponseWriter, req *http.Request) {
 	for remoteAddr, conn := range tcpConnCache.conns {
 		conn.Write([]byte(util.QuitMsg))
 		log.Println("Quit message send to ", remoteAddr)
-		time.Sleep(500 * time.Millisecond)
-		conn.Close()
+		// time.Sleep(500 * time.Millisecond)
 		log.Println("Connection closed for ", remoteAddr)
 		tcpConnCache.remove(remoteAddr)
 	}
+	time.Sleep(15 * time.Second)
 	log.Println("All connections are closed ...")
 	quitServer <- true
 	fmt.Fprintf(w, "All connections are killed\n")
@@ -184,8 +184,7 @@ func invokeUdpServer(proto, address, serverInfo string) {
 }
 
 func constructServerResp(receivedMsg, serverInfo string) []byte {
-	t := time.Now()
-	myTime := t.Format(time.RFC3339) + "\n"
-	serverResp := []byte(" Client Req : " + receivedMsg + "\n Server Resp : " + serverInfo + " \nTime : " + myTime)
+	sentMsg := fmt.Sprintf("Req: %s, Resp: %s\n", receivedMsg, serverInfo)
+	serverResp := []byte(sentMsg)
 	return serverResp
 }

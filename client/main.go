@@ -159,12 +159,15 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 	wg.Wait()
 }
 
-func exitClient(clientName, reason string, i, packetsDropped int) {
+func exitClient(clientName, reason string, i, packetsDropped int, con net.Conn) {
 	t := time.Now()
 	myTime := t.Format(time.RFC3339) + "\n"
 	server := serverDetails[clientName]
 	failedCons = append(failedCons, clientName+" Iteration : "+strconv.Itoa(i)+" Server Details : "+server+" Time : "+myTime)
 	log.Println(util.ConnTerminatedFailedMsg + clientName + " " + reason + " Exiting... " + myTime + " Packets dropped : " + strconv.Itoa(packetsDropped) + util.ConnTerminatedMsg)
+	if con != nil {
+		con.Close()
+	}
 }
 
 func serverMsghandler(conn net.Conn, clientName string, counter *int32) {
@@ -190,7 +193,6 @@ func serverMsghandler(conn net.Conn, clientName string, counter *int32) {
 func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	defer wg.Done()
-	defer c.Close()
 
 	var counter int32 = 0
 
@@ -206,19 +208,19 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 			// Connection is closed by server sent "Quit Message"
 			return
 		}
-		msgSent := clientName + " - Request-" + strconv.Itoa(i) + "\n"
+		msgSent := clientName + "- Request-" + strconv.Itoa(i) + "\n"
 		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
-				exitClient(clientName, sendErr.Error(), i, dropCounter)
+				exitClient(clientName, sendErr.Error(), i, dropCounter, c)
 				return
 			}
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnAborted) {
-				exitClient(clientName, sendErr.Error(), i, dropCounter)
+				exitClient(clientName, sendErr.Error(), i, dropCounter, c)
 				return
 			}
 			if sendErr.Error() == util.ErrMsgEOF {
-				exitClient(clientName, sendErr.Error(), i, dropCounter)
+				exitClient(clientName, sendErr.Error(), i, dropCounter, c)
 				return
 			}
 			log.Println("#====== Send Error : ", sendErr.Error())
@@ -226,7 +228,7 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
 			if resetCounter == util.MaxDropPackets {
-				exitClient(clientName, "connection is broken.", i, dropCounter)
+				exitClient(clientName, "connection is broken.", i, dropCounter, c)
 				return
 			}
 		} else {
@@ -242,6 +244,8 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 
 		time.Sleep(time.Duration(delay) * time.Millisecond)
 	}
+
+	c.Close()
 }
 
 func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
@@ -254,7 +258,7 @@ func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *s
 
 	for i := 1; i <= requests; i++ {
 
-		text := clientName + " - Request-" + strconv.Itoa(i) + "\n"
+		text := clientName + "-Request-" + strconv.Itoa(i)
 
 		_, err := c.Write([]byte(text))
 		if err != nil {
@@ -271,7 +275,7 @@ func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *s
 		log.Print("-> Request send : " + text + " - Response received : " + string(received))
 
 		if ctx.Err() != nil {
-			exitClient(clientName, "is cancelled by ctl + c.", i, 0)
+			exitClient(clientName, "is cancelled by ctl + c.", i, 0, c)
 			return
 		}
 		if i == 1 {
