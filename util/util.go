@@ -20,8 +20,8 @@ const (
 	ErrMsgListenClosed       = "use of closed network connection"
 	DialTimeout              = 3 * time.Second
 	QuitMsg                  = "Quit Connection"
-	ConnTerminatedSuccessMsg = "#=== Connection graceful exit. "
-	ConnTerminatedFailedMsg  = "#=== Connection failed exit. "
+	ConnTerminatedSuccessMsg = "#####====== Connection graceful exit. "
+	ConnTerminatedFailedMsg  = "#####====== Connection failed exit. "
 	ConnTerminatedMsg        = " #=== Connection closed."
 )
 

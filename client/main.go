@@ -12,15 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
-
-type connStruct struct {
-	conn   net.Conn
-	mutex  *sync.Mutex
-	closed bool
-}
 
 var failedCons []string
 var serverDetails = make(map[string]string)
@@ -69,15 +64,17 @@ func main() {
 		log.Fatal("No Proto defined, hence exiting...")
 	}
 
-	log.Println("\nNo: of failed connections : ", len(failedCons))
 	if len(failedCons) != 0 {
+		log.Println("\nNo: of failed connections : ", len(failedCons))
 		log.Println("\nFailed connections : \n")
 		log.Println("=============================\n")
 		log.Println(failedCons)
 		log.Println("\n=============================\n")
 		log.Println("\nClient Details : ", util.GetIPAddress())
+	} else {
+		log.Println("\n\n######========= ALL CONNECTIONS ARE CLOSED GRACEFULLY =========######\n")
 	}
-	log.Println("\n\nAll the connections are closed. Exiting TCP Client ...")
+	log.Println("\n\nExiting TCP Client ...")
 }
 
 func invokeUdpClient(proto, address string, conns int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
@@ -156,8 +153,7 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
-		conObj := &connStruct{conn: con, mutex: &sync.Mutex{}, closed: false}
-		go startTcpClient(clientName, conObj, args, wg, ctx)
+		go startTcpClient(clientName, con, args, wg, ctx)
 	}
 
 	wg.Wait()
@@ -171,29 +167,34 @@ func exitClient(clientName, reason string, i, packetsDropped int) {
 	log.Println(util.ConnTerminatedFailedMsg + clientName + " " + reason + " Exiting... " + myTime + " Packets dropped : " + strconv.Itoa(packetsDropped) + util.ConnTerminatedMsg)
 }
 
-func serverMsghandler(conObj *connStruct) {
-	s := bufio.NewScanner(conObj.conn)
+func serverMsghandler(conn net.Conn, clientName string, counter *int32) {
+	firstMsg := true
+	s := bufio.NewScanner(conn)
 	for s.Scan() {
-		data := string(s.Text())
-		log.Println(data)
-		if strings.Contains(data, util.QuitMsg) {
-			conObj.mutex.Lock()
-			conObj.closed = true
-			conObj.conn.Close()
-			conObj.mutex.Unlock()
-			log.Println(util.ConnTerminatedSuccessMsg, "Received quit connection from server : ", conObj.conn.RemoteAddr().String(), " , hence closing the connection... ", util.ConnTerminatedMsg)
+		receivedMsg := string(s.Text())
+		if firstMsg {
+			// Just storing the information
+			firstMsg = false
+			serverDetails[clientName] = receivedMsg
+		}
+		log.Println("<<<<==== Received Message : " + receivedMsg)
+		if strings.Contains(receivedMsg, util.QuitMsg) {
+			atomic.StoreInt32(counter, 1)
+			conn.Close()
+			log.Println(util.ConnTerminatedSuccessMsg, "Received quit connection from server : ", conn.RemoteAddr().String(), " , hence closing the connection... ", util.ConnTerminatedMsg)
 			return
 		}
 	}
 }
 
-func startTcpClient(clientName string, conObj *connStruct, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
+func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
-	c := conObj.conn
 	defer wg.Done()
 	defer c.Close()
 
-	go serverMsghandler(conObj)
+	var counter int32 = 0
+
+	go serverMsghandler(c, clientName, &counter)
 
 	requests, _ := strconv.Atoi(args[util.AtribReqs])
 	delay, _ := strconv.Atoi(args[util.AtribDelay])
@@ -201,19 +202,12 @@ func startTcpClient(clientName string, conObj *connStruct, args map[string]strin
 	dropCounter, resetCounter := 0, 0
 
 	for i := 1; i <= requests; i++ {
-		conObj.mutex.Lock()
-		text := clientName + " - Request-" + strconv.Itoa(i) + "\n"
-		fmt.Fprintf(c, text+"\n")
-		if conObj.closed {
-			conObj.mutex.Unlock()
+		if atomic.LoadInt32(&counter) == 1 {
+			// Connection is closed by server sent "Quit Message"
 			return
 		}
-		message, sendErr := bufio.NewReader(c).ReadString('\n')
-		conObj.mutex.Unlock()
-		if strings.Contains(message, util.ErrMsgConnAborted) {
-			exitClient(clientName, util.ErrMsgConnAborted, i, dropCounter)
-			return
-		}
+		msgSent := clientName + " - Request-" + strconv.Itoa(i) + "\n"
+		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
 				exitClient(clientName, sendErr.Error(), i, dropCounter)
@@ -227,7 +221,7 @@ func startTcpClient(clientName string, conObj *connStruct, args map[string]strin
 				exitClient(clientName, sendErr.Error(), i, dropCounter)
 				return
 			}
-			log.Println("=====>> Send Error : ", sendErr.Error())
+			log.Println("#====== Send Error : ", sendErr.Error())
 			dropCounter++
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
@@ -238,15 +232,14 @@ func startTcpClient(clientName string, conObj *connStruct, args map[string]strin
 		} else {
 			resetCounter = 0
 		}
+
+		log.Println("====>>>> Message Sent : " + msgSent)
+
 		if ctx.Err() != nil {
-			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", conObj.conn.RemoteAddr().String(), util.ConnTerminatedMsg)
+			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", c.RemoteAddr().String(), util.ConnTerminatedMsg)
 			return
 		}
-		if i == 1 {
-			// Just storing the information
-			serverDetails[clientName] = message
-		}
-		log.Print("->: " + text + " - " + message)
+
 		time.Sleep(time.Duration(delay) * time.Millisecond)
 	}
 }
