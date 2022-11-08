@@ -145,9 +145,9 @@ func handleTcpConnection(conn net.Conn, serverInfo string) {
 	defer log.Println("TCP connection gracefully closed for client ", conn.RemoteAddr().String())
 	s := bufio.NewScanner(conn)
 	for s.Scan() {
-		data := s.Text()
-		log.Print("-> ", string(data))
-		conn.Write(constructServerResp(serverInfo))
+		receivedMsg := s.Text()
+		log.Print("-> ", string(receivedMsg))
+		conn.Write(constructServerResp(receivedMsg, serverInfo))
 	}
 }
 
@@ -170,11 +170,12 @@ func invokeUdpServer(proto, address, serverInfo string) {
 
 	for {
 		n, addr, err := connection.ReadFromUDP(buffer)
-		log.Print("-> ", string(buffer[0:n-1]))
+		receivedMsg := string(buffer[0 : n-1])
+		log.Print("-> ", receivedMsg)
 		if err != nil {
 			log.Println("Error receiving data : ", err)
 		}
-		_, err = connection.WriteToUDP(constructServerResp(serverInfo), addr)
+		_, err = connection.WriteToUDP(constructServerResp(receivedMsg, serverInfo), addr)
 		if err != nil {
 			log.Println(err)
 			return
@@ -182,9 +183,9 @@ func invokeUdpServer(proto, address, serverInfo string) {
 	}
 }
 
-func constructServerResp(serverInfo string) []byte {
+func constructServerResp(receivedMsg, serverInfo string) []byte {
 	t := time.Now()
 	myTime := t.Format(time.RFC3339) + "\n"
-	serverResp := []byte("Server : " + serverInfo + " \n Time : " + myTime)
+	serverResp := []byte(" Client Req : " + receivedMsg + "\n Server Resp : " + serverInfo + " \nTime : " + myTime)
 	return serverResp
 }
