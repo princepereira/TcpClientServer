@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v08.11.2022"
+	Version                  = "v09.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -26,39 +26,46 @@ const (
 )
 
 const (
-	AtribHelp             = "-h"
-	AtribIpAddr           = "-i"
-	AtribPort             = "-p"
-	AtribCons             = "-c"
-	AtribReqs             = "-r"
-	AtribDelay            = "-d"
-	AtribProto            = "-pr"
-	AtribDisableKeepAlive = "-dka"
-	AtribTimeoutKeepAlive = "-tka"
-	AtribServerInfo       = "ServerInfo"
+	AtribHelp               = "-h"
+	AtribIpAddr             = "-i"
+	AtribPort               = "-p"
+	AtribCons               = "-c"
+	AtribReqs               = "-r"
+	AtribDelay              = "-d"
+	AtribProto              = "-pr"
+	AtribDisableKeepAlive   = "-dka"
+	AtribTimeoutKeepAlive   = "-tka"
+	AtribTimeoutPrestopWait = "-pw"
+	AtribServerInfo         = "ServerInfo"
 )
 
 var argKeys = map[string]bool{
-	AtribHelp:             true,
-	AtribIpAddr:           true,
-	AtribPort:             true,
-	AtribCons:             true,
-	AtribReqs:             true,
-	AtribDelay:            true,
-	AtribProto:            true,
-	AtribDisableKeepAlive: true,
-	AtribTimeoutKeepAlive: true,
+	AtribHelp:               true,
+	AtribIpAddr:             true,
+	AtribPort:               true,
+	AtribCons:               true,
+	AtribReqs:               true,
+	AtribDelay:              true,
+	AtribProto:              true,
+	AtribDisableKeepAlive:   true,
+	AtribTimeoutKeepAlive:   true,
+	AtribTimeoutPrestopWait: true,
 }
 
+var (
+	PrestopWaitTimeout = 15 // In seconds
+)
+
 const (
-	ConstFalse              = "false"
-	ConstTrue               = "true"
-	ConstTCP                = "tcp"
-	ConstUDP                = "udp"
-	ConstAll                = "all"
-	DefaultProto            = ConstTCP
-	DefaultDisableKeepAlive = ConstFalse
-	DefaultTimeoutKeepAlive = "15000"
+	ConstFalse                = "false"
+	ConstTrue                 = "true"
+	ConstTCP                  = "tcp"
+	ConstUDP                  = "udp"
+	ConstAll                  = "all"
+	DefaultProto              = ConstTCP
+	DefaultDisableKeepAlive   = ConstFalse
+	DefaultTimeoutKeepAlive   = "15000"
+	DefaultTimeoutPrestopWait = "10"
 )
 
 func PrintServerBanner(config map[string]string) {
@@ -76,6 +83,7 @@ func PrintServerBanner(config map[string]string) {
 		log.Printf("#         Port        : %s               \n", config[AtribPort])
 	}
 	log.Printf("#         Server      : %s               \n", config[AtribServerInfo])
+	log.Printf("#         PrestopWait : %s               \n", config[AtribTimeoutPrestopWait])
 	log.Println("#===========================================#")
 	log.Println(" ")
 }
@@ -104,6 +112,7 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribProto] = DefaultProto
 	args[AtribDisableKeepAlive] = DefaultDisableKeepAlive
 	args[AtribTimeoutKeepAlive] = DefaultTimeoutKeepAlive
+	args[AtribTimeoutPrestopWait] = DefaultTimeoutPrestopWait
 
 	for i := 1; i < len(os.Args); i++ {
 
@@ -114,9 +123,6 @@ func ValidateArgs() (map[string]string, error) {
 			if _, ok := argKeys[attrib]; !ok {
 				return nil, fmt.Errorf("unsupported attribute : %s, supported format : %v", attrib, argKeys)
 			}
-			// if _, ok := args[attrib]; ok {
-			// 	return nil, fmt.Errorf("repeated attribute : %s, supported format : %v", attrib, argKeys)
-			// }
 
 			if i == 1 && attrib == AtribHelp {
 				args[attrib] = "true"
@@ -153,14 +159,14 @@ func isValidBool(val string) bool {
 }
 
 func ValidateValues(cs string, args map[string]string) error {
-	if len(args) != 8 {
-		if cs == "client" {
-			ClientHelp()
-		} else {
-			ServerHelp()
-		}
-		return fmt.Errorf("no sufficient args")
-	}
+	// if len(args) != 8 {
+	// 	if cs == "client" {
+	// 		ClientHelp()
+	// 	} else {
+	// 		ServerHelp()
+	// 	}
+	// 	return fmt.Errorf("no sufficient args")
+	// }
 	if _, err := strconv.Atoi(args[AtribPort]); err != nil {
 		return fmt.Errorf("port (%s) should be a number. Error : %v", args[AtribPort], err)
 	}
@@ -181,6 +187,9 @@ func ValidateValues(cs string, args map[string]string) error {
 	}
 	if _, err := strconv.Atoi(args[AtribTimeoutKeepAlive]); err != nil {
 		return fmt.Errorf("TimeoutKeepAlive (%s) should be a number. Error : %v", args[AtribTimeoutKeepAlive], err)
+	}
+	if _, err := strconv.Atoi(args[AtribTimeoutPrestopWait]); err != nil {
+		return fmt.Errorf("TimeoutPrestopWait (%s) should be a number. Error : %v", args[AtribTimeoutPrestopWait], err)
 	}
 	return nil
 }
@@ -209,6 +218,7 @@ func ServerHelp() {
 	str = str + "\nParameters (Optional, Mandatory*): \n\n"
 	str = str + "   -p   : (*) Port number of the server \n"
 	str = str + "   -pr  :     Proto used. Options: TCP/UDP/All. Default: TCP \n"
+	str = str + "   -pw  :     Timeout for prestop action in seconds. \n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
 }
