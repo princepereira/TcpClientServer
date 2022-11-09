@@ -25,10 +25,9 @@ spec:
       labels:
         app: tcp-server
     spec:
-      terminationGracePeriodSeconds: 1000
       containers:
-      - image: princepereira/tcp-client-server:test
-        command: ["server.exe", "-p", "4444", "-pr", "All", "-pw", "25"]
+      - image: princepereira/tcp-client-server
+        command: ["server.exe", "-p", "4444", "-pr", "All", "-pw", "30"]
         imagePullPolicy: Always
         name: tcpudpserver
         resources: {}
@@ -42,4 +41,4 @@ spec:
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 1000
