@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v09.11.2022"
+	Version                  = "v10.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -36,6 +36,7 @@ const (
 	AtribDisableKeepAlive   = "-dka"
 	AtribTimeoutKeepAlive   = "-tka"
 	AtribTimeoutPrestopWait = "-pw"
+	AtribIterations         = "-it"
 	AtribServerInfo         = "ServerInfo"
 )
 
@@ -49,11 +50,13 @@ var argKeys = map[string]bool{
 	AtribProto:              true,
 	AtribDisableKeepAlive:   true,
 	AtribTimeoutKeepAlive:   true,
+	AtribIterations:         true,
 	AtribTimeoutPrestopWait: true,
 }
 
 var (
 	PrestopWaitTimeout = 15 // In seconds
+	NoExitClient       = true
 )
 
 const (
@@ -66,6 +69,7 @@ const (
 	DefaultDisableKeepAlive   = ConstFalse
 	DefaultTimeoutKeepAlive   = "15000"
 	DefaultTimeoutPrestopWait = "10"
+	DefaultIterations         = "1"
 )
 
 func PrintServerBanner(config map[string]string) {
@@ -97,6 +101,7 @@ func PrintClientBanner(config map[string]string) {
 	log.Printf("#         Connections      : %s                  \n", config[AtribCons])
 	log.Printf("#         Reqs/Cons        : %s                  \n", config[AtribReqs])
 	log.Printf("#         Proto            : %s                  \n", config[AtribProto])
+	log.Printf("#         Iterations       : %s                  \n", config[AtribIterations])
 	if config[AtribProto] == ConstTCP {
 		log.Printf("#         DisableKeepAlive : %s                  \n", config[AtribDisableKeepAlive])
 		log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
@@ -113,6 +118,7 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribDisableKeepAlive] = DefaultDisableKeepAlive
 	args[AtribTimeoutKeepAlive] = DefaultTimeoutKeepAlive
 	args[AtribTimeoutPrestopWait] = DefaultTimeoutPrestopWait
+	args[AtribIterations] = DefaultIterations
 
 	for i := 1; i < len(os.Args); i++ {
 
@@ -191,6 +197,9 @@ func ValidateValues(cs string, args map[string]string) error {
 	if _, err := strconv.Atoi(args[AtribTimeoutPrestopWait]); err != nil {
 		return fmt.Errorf("TimeoutPrestopWait (%s) should be a number. Error : %v", args[AtribTimeoutPrestopWait], err)
 	}
+	if _, err := strconv.Atoi(args[AtribIterations]); err != nil {
+		return fmt.Errorf("iterations (%s) should be a number. Error : %v", args[AtribIterations], err)
+	}
 	return nil
 }
 
@@ -204,6 +213,7 @@ func ClientHelp() {
 	str = str + "   -c   : (*) Number of clients/threads/connections \n"
 	str = str + "   -r   : (*) Number of requests per connection \n"
 	str = str + "   -d   : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds) \n"
+	str = str + "   -it  :     Number of iterations. Default: 1 \n"
 	str = str + "   -pr  :     Proto used. Options: TCP/UDP. Default: TCP \n"
 	str = str + "   -dka :     Disable KeepAlive. Options: True/False. Default: False \n"
 	str = str + "   -tka :     KeepAlive Time in milliseconds. Default: 15 seconds \n"
@@ -221,6 +231,10 @@ func ServerHelp() {
 	str = str + "   -pw  :     Timeout for prestop action in seconds. \n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
+}
+
+func GetClientName(proto string, iter, conn int) string {
+	return fmt.Sprintf("Iter-%d-%sClient-%d", iter, strings.ToUpper(proto), conn)
 }
 
 func GetIPAddress() string {

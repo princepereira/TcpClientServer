@@ -18,7 +18,7 @@ import (
 )
 
 var failedCons []string
-var serverDetails = make(map[string]string)
+var serverInfoMap *sync.Map
 
 func main() {
 
@@ -44,6 +44,7 @@ func main() {
 
 	conns, _ := strconv.Atoi(args[util.AtribCons])
 	proto := args[util.AtribProto]
+	iter, _ := strconv.Atoi(args[util.AtribIterations])
 
 	wg := new(sync.WaitGroup)
 
@@ -55,29 +56,39 @@ func main() {
 
 	address := fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
 
-	switch proto {
-	case util.ConstTCP:
-		invokeTcpClient(proto, address, conns, args, wg, ctx)
-	case util.ConstUDP:
-		invokeUdpClient(proto, address, conns, args, wg, ctx)
-	default:
-		log.Fatal("No Proto defined, hence exiting...")
+	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
+
+		serverInfoMap = new(sync.Map)
+		failedCons = make([]string, 0)
+
+		log.Printf("\n\n######=========  ITERATION : %d STARTED =========######\n\n", turn)
+
+		switch proto {
+		case util.ConstTCP:
+			invokeTcpClient(proto, address, conns, turn, args, wg, ctx)
+		case util.ConstUDP:
+			invokeUdpClient(proto, address, conns, turn, args, wg, ctx)
+		default:
+			log.Fatal("No Proto defined, hence exiting...")
+		}
+
+		if len(failedCons) != 0 {
+			str := fmt.Sprintf("\n\n\n#======= Iteration : %d, No: of failed connections : %d", turn, len(failedCons))
+			str = str + "\n\nFailed connections : \n\n"
+			str = str + "=============================\n"
+			str = str + fmt.Sprintf("%v", failedCons)
+			str = str + "\n=============================\n"
+			str = str + fmt.Sprintf("\nClient Details : %s", util.GetIPAddress())
+			log.Println(str)
+		} else {
+			log.Printf("\n\n######========= ALL CONNECTIONS ARE CLOSED GRACEFULLY FOR ITERATION : %d =========######\n\n", turn)
+		}
 	}
 
-	if len(failedCons) != 0 {
-		log.Println("\nNo: of failed connections : ", len(failedCons))
-		log.Println("\nFailed connections : \n")
-		log.Println("=============================\n")
-		log.Println(failedCons)
-		log.Println("\n=============================\n")
-		log.Println("\nClient Details : ", util.GetIPAddress())
-	} else {
-		log.Println("\n\n######========= ALL CONNECTIONS ARE CLOSED GRACEFULLY =========######\n")
-	}
 	log.Println("\n\nExiting TCP Client ...")
 }
 
-func invokeUdpClient(proto, address string, conns int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
+func invokeUdpClient(proto, address string, conns, iter int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	var connMap = make(map[string]net.Conn)
 
@@ -85,22 +96,28 @@ func invokeUdpClient(proto, address string, conns int, args map[string]string, w
 	for i := 1; i <= conns; i++ {
 
 		time.Sleep(2 * time.Second)
-		clientName := "UdpClient-" + strconv.Itoa(i)
+		if ctx.Err() != nil {
+			log.Println(util.ConnTerminatedSuccessMsg, "UDP Connection create terminated by ctrl+c signal. ", util.ConnTerminatedMsg)
+			return
+		}
+
+		clientName := util.GetClientName(proto, iter, i)
+
 		udpServer, err := net.ResolveUDPAddr(proto, address)
 		if err != nil {
-			failedCons = append(failedCons, clientName)
+			failedCons = append(failedCons, clientName+" Dial Failed")
 			log.Println("#===== Failed to connect to ", address, " by ", clientName, " . Resolve address failed. Error : ", err, " ======#")
 			continue
 		}
 
 		c, err := net.DialUDP(proto, nil, udpServer)
 		if err != nil {
-			failedCons = append(failedCons, clientName)
+			failedCons = append(failedCons, clientName+" Dial Failed")
 			log.Println("#===== Failed to connect to ", address, " by ", clientName, " . Dial failed. Error : ", err, " ======#")
 			continue
 		}
 
-		log.Println("#===== Udp Client Connected : ", clientName, " ======#")
+		log.Println("#===== UDP Client Connected : ", clientName, " ======#")
 		connMap[clientName] = c
 	}
 
@@ -116,7 +133,7 @@ func invokeUdpClient(proto, address string, conns int, args map[string]string, w
 	wg.Wait()
 }
 
-func invokeTcpClient(proto, address string, conns int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
+func invokeTcpClient(proto, address string, conns, iter int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	disableKeepAlive, _ := strconv.ParseBool(args[util.AtribDisableKeepAlive])
 	keepAliveTimeOut, _ := strconv.Atoi(args[util.AtribTimeoutKeepAlive])
@@ -125,11 +142,18 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 
 	// Setting up connections
 	for i := 1; i <= conns; i++ {
-		clientName := "TcpClient-" + strconv.Itoa(i)
+
 		time.Sleep(2 * time.Second)
+		if ctx.Err() != nil {
+			log.Println(util.ConnTerminatedSuccessMsg, "TCP Connection create terminated by ctrl+c signal. ", util.ConnTerminatedMsg)
+			return
+		}
+
+		clientName := util.GetClientName(proto, iter, i)
+
 		c, err := net.DialTimeout(proto, address, util.DialTimeout)
 		if err != nil {
-			failedCons = append(failedCons, clientName)
+			failedCons = append(failedCons, clientName+" Dial Failed")
 			log.Println("#===== Failed to connect to ", address, " by ", clientName, " ======#")
 			log.Println(err)
 			continue
@@ -143,7 +167,7 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 			}
 		}
 
-		log.Println("#===== Tcp Client Connected : ", clientName, " ======#")
+		log.Println("#===== TCP Client Connected : ", clientName, " ======#")
 		connMap[clientName] = c
 	}
 
@@ -162,8 +186,11 @@ func invokeTcpClient(proto, address string, conns int, args map[string]string, w
 func exitClient(clientName, reason string, i, packetsDropped int, con net.Conn) {
 	t := time.Now()
 	myTime := t.Format(time.RFC3339) + "\n"
-	server := serverDetails[clientName]
-	failedCons = append(failedCons, clientName+" Iteration : "+strconv.Itoa(i)+" Server Details : "+server+" Time : "+myTime)
+	var serverInfo string
+	if info, ok := serverInfoMap.Load(clientName); ok {
+		serverInfo = info.(string)
+	}
+	failedCons = append(failedCons, clientName+" -> "+serverInfo+" - Failed Time : "+myTime)
 	log.Println(util.ConnTerminatedFailedMsg + clientName + " " + reason + " Exiting... " + myTime + " Packets dropped : " + strconv.Itoa(packetsDropped) + util.ConnTerminatedMsg)
 	if con != nil {
 		con.Close()
@@ -178,7 +205,7 @@ func serverMsghandler(conn net.Conn, clientName string, counter *int32) {
 		if firstMsg {
 			// Just storing the information
 			firstMsg = false
-			serverDetails[clientName] = receivedMsg
+			serverInfoMap.Store(clientName, receivedMsg)
 		}
 		log.Println("<<<<==== Received Message : " + receivedMsg)
 		if strings.Contains(receivedMsg, util.QuitMsg) {
@@ -278,9 +305,10 @@ func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *s
 			exitClient(clientName, "is cancelled by ctl + c.", i, 0, c)
 			return
 		}
+
 		if i == 1 {
 			// Just storing the information
-			serverDetails[clientName] = string(received)
+			serverInfoMap.Store(clientName, string(received))
 		}
 
 		time.Sleep(time.Duration(delay) * time.Millisecond)
@@ -291,5 +319,6 @@ func handleCtrlC(c chan os.Signal, cancel context.CancelFunc) {
 	<-c
 	// handle ctrl+c event here
 	log.Println("#===== Ctrl + C called ... Exiting in few seconds")
+	util.NoExitClient = false
 	cancel()
 }

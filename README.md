@@ -115,3 +115,11 @@ client -i <Service IP> -p <Internal Port> -c <No: of Connections> -r <Reqs per C
 ```
 Eg: client >> client -i 127.0.0.1 -p 4444 -c 10 -r 10 -d 50
 ```
+Or you can use the domain name also to make the connection
+```
+Domain name: <service-name>.<namespace>.svc.cluster.local
+```
+```
+Eg: tcp-server-.demo.svc.cluster.local
+client >> client -i tcp-server.demo.svc.cluster.local -p 4444 -c 10 -r 10 -d 50
+```
