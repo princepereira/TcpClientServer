@@ -1,6 +1,6 @@
 # $tag = ":test"
-$tag = ":latest"
-# $tag = ":stable"
+# $tag = ":latest"
+$tag = ":stable"
 # $tag = ""
 go build -o .\bins\client.exe .\client\
 go build -o .\bins\server.exe .\server\

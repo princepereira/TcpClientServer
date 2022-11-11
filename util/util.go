@@ -22,7 +22,7 @@ const (
 	QuitMsg                  = "Quit Connection"
 	ConnTerminatedSuccessMsg = "#####====== Connection graceful exit. "
 	ConnTerminatedFailedMsg  = "#####====== Connection failed exit. "
-	ConnTerminatedMsg        = " #=== Connection closed."
+	ConnTerminatedMsg        = " #=== Connection terminated."
 )
 
 const (
@@ -71,6 +71,16 @@ const (
 	DefaultTimeoutPrestopWait = "10"
 	DefaultIterations         = "1"
 )
+
+type ConnInfo struct {
+	ClientName    string `json:",omitempty"`
+	LocalAddess   string `json:",omitempty"`
+	RemoteAddress string `json:",omitempty"`
+	ServerInfo    string `json:",omitempty"`
+	RequestInfo   string `json:",omitempty"`
+	FailedReason  string `json:",omitempty"`
+	FailedTime    string `json:",omitempty"`
+}
 
 func PrintServerBanner(config map[string]string) {
 	log.Println(" ")

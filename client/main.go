@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-var failedCons []string
+var failedCons []util.ConnInfo
 var serverInfoMap *sync.Map
 
 func main() {
@@ -59,7 +60,7 @@ func main() {
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
 
 		serverInfoMap = new(sync.Map)
-		failedCons = make([]string, 0)
+		failedCons = make([]util.ConnInfo, 0)
 
 		log.Printf("\n\n######=========  ITERATION : %d STARTED =========######\n\n", turn)
 
@@ -76,9 +77,14 @@ func main() {
 			str := fmt.Sprintf("\n\n\n#======= Iteration : %d, No: of failed connections : %d", turn, len(failedCons))
 			str = str + "\n\nFailed connections : \n\n"
 			str = str + "=============================\n"
-			str = str + fmt.Sprintf("%v", failedCons)
-			str = str + "\n=============================\n"
-			str = str + fmt.Sprintf("\nClient Details : %s", util.GetIPAddress())
+			for _, v := range failedCons {
+				failure, err := json.MarshalIndent(v, "", "  ")
+				if err == nil {
+					str = str + "\n" + string(failure)
+				}
+			}
+			str = str + "\n\n=============================\n"
+			// str = str + fmt.Sprintf("\nClient Details : %s", util.GetIPAddress())
 			log.Println(str)
 		} else {
 			log.Printf("\n\n######========= ALL CONNECTIONS ARE CLOSED GRACEFULLY FOR ITERATION : %d =========######\n\n", turn)
@@ -105,19 +111,17 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 
 		udpServer, err := net.ResolveUDPAddr(proto, address)
 		if err != nil {
-			failedCons = append(failedCons, clientName+" Dial Failed")
-			log.Println("#===== Failed to connect to ", address, " by ", clientName, " . Resolve address failed. Error : ", err, " ======#")
+			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, false)
 			continue
 		}
 
 		c, err := net.DialUDP(proto, nil, udpServer)
 		if err != nil {
-			failedCons = append(failedCons, clientName+" Dial Failed")
-			log.Println("#===== Failed to connect to ", address, " by ", clientName, " . Dial failed. Error : ", err, " ======#")
+			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, false)
 			continue
 		}
 
-		log.Println("#===== UDP Client Connected : ", clientName, " ======#")
+		log.Println("#===== UDPClient Connected : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
 		connMap[clientName] = c
 	}
 
@@ -127,7 +131,7 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
-		go startUdpClient(clientName, con, args, wg, ctx)
+		go startUdpClient(clientName, address, con, args, wg, ctx)
 	}
 
 	wg.Wait()
@@ -153,9 +157,7 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 
 		c, err := net.DialTimeout(proto, address, util.DialTimeout)
 		if err != nil {
-			failedCons = append(failedCons, clientName+" Dial Failed")
-			log.Println("#===== Failed to connect to ", address, " by ", clientName, " ======#")
-			log.Println(err)
+			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, false)
 			continue
 		}
 
@@ -167,7 +169,7 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 			}
 		}
 
-		log.Println("#===== TCP Client Connected : ", clientName, " ======#")
+		log.Println("#===== TCPClient Connected : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
 		connMap[clientName] = c
 	}
 
@@ -177,23 +179,41 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
-		go startTcpClient(clientName, con, args, wg, ctx)
+		go startTcpClient(clientName, address, con, args, wg, ctx)
 	}
 
 	wg.Wait()
 }
 
-func exitClient(clientName, reason string, i, packetsDropped int, con net.Conn) {
+func storeConnFailure(clientName, remoteAddress, request, reason string, i, packetsDropped int, con net.Conn, exit bool) {
 	t := time.Now()
-	myTime := t.Format(time.RFC3339) + "\n"
+	failedTime := t.Format(time.RFC3339)
 	var serverInfo string
 	if info, ok := serverInfoMap.Load(clientName); ok {
 		serverInfo = info.(string)
 	}
-	failedCons = append(failedCons, clientName+" -> "+serverInfo+" - Failed Time : "+myTime)
-	log.Println(util.ConnTerminatedFailedMsg + clientName + " " + reason + " Exiting... " + myTime + " Packets dropped : " + strconv.Itoa(packetsDropped) + util.ConnTerminatedMsg)
+
+	var localAddress string
 	if con != nil {
+		localAddress = con.LocalAddr().String()
 		con.Close()
+	}
+
+	connInfo := util.ConnInfo{
+		ClientName:    clientName,
+		LocalAddess:   localAddress,
+		RemoteAddress: remoteAddress,
+		ServerInfo:    serverInfo,
+		RequestInfo:   request,
+		FailedReason:  reason,
+		FailedTime:    failedTime,
+	}
+
+	failedCons = append(failedCons, connInfo)
+	if exit {
+		log.Printf("%s, Exiting... Packets Dropped : %d . %s \n\nConnectionInfo : %v \n", util.ConnTerminatedFailedMsg, packetsDropped, util.ConnTerminatedMsg, connInfo)
+	} else {
+		log.Printf("\n#===== Failed to connect to : %s by client : %s . %s ======#\n\nConnectionInfo : %v \n\n", remoteAddress, clientName, util.ConnTerminatedMsg, connInfo)
 	}
 }
 
@@ -217,7 +237,7 @@ func serverMsghandler(conn net.Conn, clientName string, counter *int32) {
 	}
 }
 
-func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
+func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	defer wg.Done()
 
@@ -239,15 +259,15 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
-				exitClient(clientName, sendErr.Error(), i, dropCounter, c)
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
 				return
 			}
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnAborted) {
-				exitClient(clientName, sendErr.Error(), i, dropCounter, c)
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
 				return
 			}
 			if sendErr.Error() == util.ErrMsgEOF {
-				exitClient(clientName, sendErr.Error(), i, dropCounter, c)
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
 				return
 			}
 			log.Println("#====== Send Error : ", sendErr.Error())
@@ -255,7 +275,7 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
 			if resetCounter == util.MaxDropPackets {
-				exitClient(clientName, "connection is broken.", i, dropCounter, c)
+				storeConnFailure(clientName, remoteAddr, msgSent, "connection is broken.", i, dropCounter, c, true)
 				return
 			}
 		} else {
@@ -275,7 +295,7 @@ func startTcpClient(clientName string, c net.Conn, args map[string]string, wg *s
 	c.Close()
 }
 
-func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
+func startUdpClient(clientName, remoteAddr string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	defer wg.Done()
 	defer c.Close()
@@ -302,7 +322,7 @@ func startUdpClient(clientName string, c net.Conn, args map[string]string, wg *s
 		log.Print("-> Request send : " + text + " - Response received : " + string(received))
 
 		if ctx.Err() != nil {
-			exitClient(clientName, "is cancelled by ctl + c.", i, 0, c)
+			storeConnFailure(clientName, remoteAddr, text, "is cancelled by ctl + c.", i, 0, c, true)
 			return
 		}
 
