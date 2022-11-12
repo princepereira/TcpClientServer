@@ -41,10 +41,10 @@ func (c tcpConnStruct) remove(remoteAdd string) net.Conn {
 
 func killHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Kill handler called... Waiting for %d seconds...\n", util.PrestopWaitTimeout)
-	time.Sleep(time.Duration(util.PrestopWaitTimeout) * time.Second)
 	if listener != nil {
 		listener.Close()
 	}
+	time.Sleep(time.Duration(util.PrestopWaitTimeout) * time.Second)
 	for remoteAddr, conn := range tcpConnCache.conns {
 		conn.Write([]byte(util.QuitMsg))
 		log.Println("Quit message send to ", remoteAddr)

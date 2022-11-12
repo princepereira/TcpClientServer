@@ -1,6 +1,6 @@
 # $tag = ":test"
-$tag = ":latest"
-# $tag = ":stable"
+# $tag = ":latest"
+$tag = ":stable"
 # $tag = ":WS2022"
 # $tag = ""
 go build -o .\bins\client.exe .\client\
