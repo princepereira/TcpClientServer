@@ -62,9 +62,55 @@ docker pull princepereira/tcp-client-server:WindowsServer2022
 .\server.exe -p 4444
 ```
 
+#### Server Help: 
+```
+PS> .\server.exe -h
+
+#==============================#
+
+Format : .\server.exe -p <Port>
+
+Eg : .\server.exe -p 4444
+
+Parameters (Optional, Mandatory*):
+
+   -p   : (*) Port number of the server
+   -pr  :     Proto used. Options: TCP/UDP/All. Default: TCP
+   -pw  :     Timeout for prestop action in seconds.
+
+#==============================#
+```
+
 #### Run Client: 
 ```
-.\client.exe -i 127.0.0.1 -p 4444 -c 10 -r 10 -d 50
+PS> .\client.exe -i 127.0.0.1 -p 4444 -c 10 -r 10 -d 50
+
+```
+
+#### Client Help: 
+```
+
+PS> .\client.exe -h
+
+#==============================#
+
+Format : .\client.exe -i <IP> -p <Port> -c <Number of Connections> -r <Number of Requests/Connection> -d <Delay (in ms) between each request>
+
+Eg : .\client.exe -i 127.0.0.1 -p 4444 -c 1 -r 10000 -d 1
+
+Parameters (Optional, Mandatory*):
+
+   -i   : (*) IP Address of the server
+   -p   : (*) Port number of the server
+   -c   : (*) Number of clients/threads/connections
+   -r   : (*) Number of requests per connection
+   -d   : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds)
+   -it  :     Number of iterations. Default: 1
+   -pr  :     Proto used. Options: TCP/UDP. Default: TCP
+   -dka :     Disable KeepAlive. Options: True/False. Default: False
+   -tka :     KeepAlive Time in milliseconds. Default: 15 seconds
+
+#==============================#
 
 ```
 
