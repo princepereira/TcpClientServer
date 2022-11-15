@@ -18,8 +18,17 @@ type tcpConnStruct struct {
 	mutex *sync.Mutex
 }
 
+type udpConnStruct struct {
+	conns map[string]*net.UDPAddr
+	mutex *sync.Mutex
+}
+
 var tcpConnCache = tcpConnStruct{conns: make(map[string]net.Conn), mutex: &sync.Mutex{}}
+var udpConnCache = udpConnStruct{conns: make(map[string]*net.UDPAddr), mutex: &sync.Mutex{}}
+
 var listener net.Listener
+var udpListener *net.UDPConn
+
 var quitServer = make(chan bool)
 
 func (c tcpConnStruct) add(remoteAdd string, conn net.Conn) {
@@ -39,6 +48,22 @@ func (c tcpConnStruct) remove(remoteAdd string) net.Conn {
 	return conn
 }
 
+func (c udpConnStruct) add(remoteAdd string, conn *net.UDPAddr) {
+	c.mutex.Lock()
+	if _, ok := c.conns[remoteAdd]; !ok {
+		c.conns[remoteAdd] = conn
+	}
+	c.mutex.Unlock()
+}
+
+func (c udpConnStruct) remove(remoteAdd string) *net.UDPAddr {
+	c.mutex.Lock()
+	conn := c.conns[remoteAdd]
+	delete(c.conns, remoteAdd)
+	c.mutex.Unlock()
+	return conn
+}
+
 func killHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Kill handler called... Waiting for %d seconds...\n", util.PrestopWaitTimeout)
 	if listener != nil {
@@ -50,10 +75,18 @@ func killHandler(w http.ResponseWriter, req *http.Request) {
 		log.Println("Quit message send to ", remoteAddr)
 		tcpConnCache.remove(remoteAddr)
 	}
+	for remoteAddr, conn := range udpConnCache.conns {
+		_, err := udpListener.WriteToUDP([]byte(util.QuitMsg), conn)
+		log.Println("Quit message send to ", remoteAddr, " Error : ", err)
+		udpConnCache.remove(remoteAddr)
+	}
+	fmt.Fprintf(w, "All connections are killed\n")
 	time.Sleep(15 * time.Second)
+	if udpListener != nil {
+		udpListener.Close()
+	}
 	log.Println("All connections are closed ...")
 	quitServer <- true
-	fmt.Fprintf(w, "All connections are killed\n")
 }
 
 func startKillServer() {
@@ -144,10 +177,18 @@ func handleTcpConnection(conn net.Conn, serverInfo string) {
 	defer tcpConnCache.remove(conn.RemoteAddr().String())
 	defer log.Println("TCP connection gracefully closed for client ", conn.RemoteAddr().String())
 	s := bufio.NewScanner(conn)
+	var msgSent, receivedMsg string
+	var sendError error
 	for s.Scan() {
-		receivedMsg := s.Text()
+		receivedMsg = s.Text()
 		log.Print("-> ", string(receivedMsg))
-		conn.Write(constructServerResp(receivedMsg, serverInfo))
+		msgSent = constructServerResp(receivedMsg, serverInfo)
+		_, sendError = conn.Write([]byte(msgSent))
+		if sendError != nil {
+			log.Println("TCP -> Failed to send message to ", conn.RemoteAddr().String(), " Message : ", msgSent, " Error : ", sendError)
+		} else {
+			log.Println("TCP -> Message sent success to ", conn.RemoteAddr().String(), " Message : ", msgSent)
+		}
 	}
 }
 
@@ -158,33 +199,46 @@ func invokeUdpServer(proto, address, serverInfo string) {
 		log.Fatalln("Resolve UDP address failed, hence exiting... Error : ", err)
 	}
 
-	connection, err := net.ListenUDP(proto, s)
+	udpListener, err = net.ListenUDP(proto, s)
 	if err != nil {
 		log.Fatalln("Listen UDP address failed, hence exiting... Error : ", err)
 	}
 
 	log.Println("UDP Server started on port : ", address)
 
-	defer connection.Close()
-	buffer := make([]byte, 1024)
+	defer udpListener.Close()
+	for i := 1; i <= 4; i++ {
+		go udpServers(udpListener, serverInfo, i)
+	}
+	udpServers(udpListener, serverInfo, 5)
+}
 
+func udpServers(listen *net.UDPConn, serverInfo string, index int) {
+	var msgSent, receivedMsg string
+	buffer := make([]byte, 1024)
 	for {
-		n, addr, err := connection.ReadFromUDP(buffer)
-		receivedMsg := string(buffer[0 : n-1])
+		n, remoteAddr, err := listen.ReadFromUDP(buffer)
+		if n <= 0 {
+			log.Println("UDP listener ", index, " exitted")
+			return
+		}
+		receivedMsg = string(buffer[0 : n-1])
 		log.Print("-> ", receivedMsg)
+		udpConnCache.add(remoteAddr.String(), remoteAddr)
 		if err != nil {
 			log.Println("Error receiving data : ", err)
 		}
-		_, err = connection.WriteToUDP(constructServerResp(receivedMsg, serverInfo), addr)
+		msgSent = constructServerResp(receivedMsg, serverInfo)
+		_, err = listen.WriteToUDP([]byte(msgSent), remoteAddr)
 		if err != nil {
-			log.Println(err)
-			return
+			log.Println("TCP -> Failed to send message to ", remoteAddr.String(), " Message : ", msgSent, " Error : ", err)
+		} else {
+			log.Println("TCP -> Message sent success to ", remoteAddr.String(), " Message : ", msgSent)
 		}
 	}
 }
 
-func constructServerResp(receivedMsg, serverInfo string) []byte {
+func constructServerResp(receivedMsg, serverInfo string) string {
 	sentMsg := fmt.Sprintf("Req: %s, Resp: %s\n", receivedMsg, serverInfo)
-	serverResp := []byte(sentMsg)
-	return serverResp
+	return sentMsg
 }

@@ -166,6 +166,6 @@ Or you can use the domain name also to make the connection
 Domain name: <service-name>.<namespace>.svc.cluster.local
 ```
 ```
-Eg: tcp-server-.demo.svc.cluster.local
+Eg: tcp-server.demo.svc.cluster.local
 client >> client -i tcp-server.demo.svc.cluster.local -p 4444 -c 10 -r 10 -d 50
 ```

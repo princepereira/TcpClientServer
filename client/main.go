@@ -121,7 +121,7 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 			continue
 		}
 
-		log.Println("#===== UDPClient Connected : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
+		log.Println("#===== UDPClient Port Opened : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
 		connMap[clientName] = c
 	}
 
@@ -147,7 +147,7 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 	// Setting up connections
 	for i := 1; i <= conns; i++ {
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * time.Second)
 		if ctx.Err() != nil {
 			log.Println(util.ConnTerminatedSuccessMsg, "TCP Connection create terminated by ctrl+c signal. ", util.ConnTerminatedMsg)
 			return
@@ -217,23 +217,30 @@ func storeConnFailure(clientName, remoteAddress, request, reason string, i, pack
 	}
 }
 
-func serverMsghandler(conn net.Conn, clientName string, counter *int32) {
+func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay int) {
 	firstMsg := true
+	var receivedMsg string
+
 	s := bufio.NewScanner(conn)
+
 	for s.Scan() {
-		receivedMsg := string(s.Text())
+
+		receivedMsg = string(s.Text())
+		log.Println("<<<<==== Received Message : " + receivedMsg)
+
 		if firstMsg {
 			// Just storing the information
 			firstMsg = false
 			serverInfoMap.Store(clientName, receivedMsg)
 		}
-		log.Println("<<<<==== Received Message : " + receivedMsg)
+
 		if strings.Contains(receivedMsg, util.QuitMsg) {
 			atomic.StoreInt32(counter, 1)
 			conn.Close()
 			log.Println(util.ConnTerminatedSuccessMsg, "Received quit connection from server : ", conn.RemoteAddr().String(), " , hence closing the connection... ", util.ConnTerminatedMsg)
 			return
 		}
+
 	}
 }
 
@@ -242,11 +249,10 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 	defer wg.Done()
 
 	var counter int32 = 0
-
-	go serverMsghandler(c, clientName, &counter)
-
 	requests, _ := strconv.Atoi(args[util.AtribReqs])
 	delay, _ := strconv.Atoi(args[util.AtribDelay])
+
+	go serverMsghandler(c, clientName, &counter, delay)
 
 	dropCounter, resetCounter := 0, 0
 
@@ -255,7 +261,7 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			// Connection is closed by server sent "Quit Message"
 			return
 		}
-		msgSent := clientName + "- Request-" + strconv.Itoa(i) + "\n"
+		msgSent := clientName + "- Req-" + strconv.Itoa(i) + "\n"
 		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
@@ -270,7 +276,11 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
 				return
 			}
-			log.Println("#====== Send Error : ", sendErr.Error())
+			if strings.Contains(sendErr.Error(), util.ErrMsgListenClosed) {
+				// Error message is already handled in server handler
+				return
+			}
+			log.Println("#====== TCP Send Error : ", sendErr.Error())
 			dropCounter++
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
@@ -282,7 +292,7 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			resetCounter = 0
 		}
 
-		log.Println("====>>>> Message Sent : " + msgSent)
+		log.Println("====>>>> TCP Request Sent : " + msgSent)
 
 		if ctx.Err() != nil {
 			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", c.RemoteAddr().String(), util.ConnTerminatedMsg)
@@ -298,41 +308,50 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 func startUdpClient(clientName, remoteAddr string, c net.Conn, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	defer wg.Done()
-	defer c.Close()
 
+	var counter int32 = 0
 	requests, _ := strconv.Atoi(args[util.AtribReqs])
 	delay, _ := strconv.Atoi(args[util.AtribDelay])
 
+	go serverMsghandler(c, clientName, &counter, delay)
+
+	dropCounter, resetCounter := 0, 0
+
 	for i := 1; i <= requests; i++ {
 
-		text := clientName + "-Request-" + strconv.Itoa(i)
+		msgSent := clientName + "- Req-" + strconv.Itoa(i) + "\n"
 
-		_, err := c.Write([]byte(text))
-		if err != nil {
-			log.Printf("Write data failed. Client : %s, Error : %v, Message : %s", clientName, err.Error(), text)
+		_, sendErr := c.Write([]byte(msgSent))
+		if sendErr != nil {
+			log.Println("#====== UDP Send Error : ", sendErr.Error())
+			if strings.Contains(sendErr.Error(), util.ErrMsgListenClosed) {
+				// Error message is already handled in server handler
+				return
+			}
+			dropCounter++
+			resetCounter++
+			log.Println("Packet dropped with ", clientName, " request : ", i)
+			if resetCounter == util.MaxDropPackets {
+				storeConnFailure(clientName, remoteAddr, msgSent, "connection is broken.", i, dropCounter, c, true)
+				return
+			}
+		} else {
+			resetCounter = 0
 		}
 
-		// buffer to get data
-		received := make([]byte, 1024)
-		_, err = c.Read(received)
-		if err != nil {
-			log.Printf("Read data failed. Client : %s, Error : %v, Message : %s", clientName, err.Error(), text)
-		}
-
-		log.Print("-> Request send : " + text + " - Response received : " + string(received))
+		log.Println("====>>>> UDP Request Sent : " + msgSent)
 
 		if ctx.Err() != nil {
-			storeConnFailure(clientName, remoteAddr, text, "is cancelled by ctl + c.", i, 0, c, true)
+			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", c.RemoteAddr().String(), util.ConnTerminatedMsg)
 			return
 		}
 
-		if i == 1 {
-			// Just storing the information
-			serverInfoMap.Store(clientName, string(received))
-		}
-
 		time.Sleep(time.Duration(delay) * time.Millisecond)
+
 	}
+
+	c.Close()
+
 }
 
 func handleCtrlC(c chan os.Signal, cancel context.CancelFunc) {

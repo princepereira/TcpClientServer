@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v10.11.2022"
+	Version                  = "v15.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -68,7 +68,7 @@ const (
 	DefaultProto              = ConstTCP
 	DefaultDisableKeepAlive   = ConstFalse
 	DefaultTimeoutKeepAlive   = "15000"
-	DefaultTimeoutPrestopWait = "10"
+	DefaultTimeoutPrestopWait = "5"
 	DefaultIterations         = "1"
 )
 
@@ -85,7 +85,7 @@ type ConnInfo struct {
 func PrintServerBanner(config map[string]string) {
 	log.Println(" ")
 	log.Println("#===========================================#")
-	log.Println("#         Title       : TCP Server          ")
+	log.Println("#         Title       : L4 Server          ")
 	log.Printf("#         Version     : %s          \n", Version)
 	log.Printf("#         Proto       : %s        \n", config[AtribProto])
 	if config[AtribProto] == ConstAll {
@@ -105,7 +105,7 @@ func PrintServerBanner(config map[string]string) {
 func PrintClientBanner(config map[string]string) {
 	log.Println(" ")
 	log.Println("#===========================================#")
-	log.Println("#         Title            : TCP Client          ")
+	log.Println("#         Title            : L4 Client          ")
 	log.Printf("#         Version          : %s          \n", Version)
 	log.Printf("#         Host             : %s:%s               \n", config[AtribIpAddr], config[AtribPort])
 	log.Printf("#         Connections      : %s                  \n", config[AtribCons])
