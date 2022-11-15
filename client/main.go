@@ -18,8 +18,9 @@ import (
 	"time"
 )
 
-var failedCons []util.ConnInfo
+var failedConsMap = new(sync.Map)
 var serverInfoMap *sync.Map
+var connFailureCount int32
 
 func main() {
 
@@ -60,7 +61,6 @@ func main() {
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
 
 		serverInfoMap = new(sync.Map)
-		failedCons = make([]util.ConnInfo, 0)
 
 		log.Printf("\n\n######=========  ITERATION : %d STARTED =========######\n\n", turn)
 
@@ -73,16 +73,21 @@ func main() {
 			log.Fatal("No Proto defined, hence exiting...")
 		}
 
-		if len(failedCons) != 0 {
-			str := fmt.Sprintf("\n\n\n#======= Iteration : %d, No: of failed connections : %d", turn, len(failedCons))
+		if atomic.LoadInt32(&connFailureCount) >= 1 {
+
+			str := fmt.Sprintf("\n\n\n#======= Iteration : %d, No: of failed connections : %d", turn, atomic.LoadInt32(&connFailureCount))
 			str = str + "\n\nFailed connections : \n\n"
 			str = str + "=============================\n"
-			for _, v := range failedCons {
+
+			failedConsMap.Range(func(key, value interface{}) bool {
+				v := value.(util.ConnInfo)
 				failure, err := json.MarshalIndent(v, "", "  ")
 				if err == nil {
 					str = str + "\n" + string(failure)
 				}
-			}
+				return true
+			})
+
 			str = str + "\n\n=============================\n"
 			// str = str + fmt.Sprintf("\nClient Details : %s", util.GetIPAddress())
 			log.Println(str)
@@ -101,7 +106,7 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 	// Setting up connections
 	for i := 1; i <= conns; i++ {
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * time.Second)
 		if ctx.Err() != nil {
 			log.Println(util.ConnTerminatedSuccessMsg, "UDP Connection create terminated by ctrl+c signal. ", util.ConnTerminatedMsg)
 			return
@@ -121,13 +126,13 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 			continue
 		}
 
-		log.Println("#===== UDPClient Port Opened : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
+		log.Println("#===== UDPClient Port Opened:", clientName, ",LocalAddress:", c.LocalAddr().String(), ",RemoteAddress:", c.RemoteAddr().String(), "======#")
 		connMap[clientName] = c
 	}
 
 	time.Sleep(3 * time.Second)
 
-	wg.Add(conns - len(failedCons))
+	wg.Add(conns - int(atomic.LoadInt32(&connFailureCount)))
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
@@ -169,13 +174,13 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 			}
 		}
 
-		log.Println("#===== TCPClient Connected : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
+		log.Println("#===== TCPClient Connected:", clientName, ",LocalAddress:", c.LocalAddr().String(), ",RemoteAddress:", c.RemoteAddr().String(), "======#")
 		connMap[clientName] = c
 	}
 
 	time.Sleep(3 * time.Second)
 
-	wg.Add(conns - len(failedCons))
+	wg.Add(conns - int(atomic.LoadInt32(&connFailureCount)))
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
@@ -186,6 +191,11 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 }
 
 func storeConnFailure(clientName, remoteAddress, request, reason string, i, packetsDropped int, con net.Conn, exit bool) {
+
+	if _, ok := failedConsMap.Load(clientName); ok {
+		return
+	}
+
 	t := time.Now()
 	failedTime := t.Format(time.RFC3339)
 	var serverInfo string
@@ -209,12 +219,14 @@ func storeConnFailure(clientName, remoteAddress, request, reason string, i, pack
 		FailedTime:    failedTime,
 	}
 
-	failedCons = append(failedCons, connInfo)
+	failedConsMap.Store(clientName, connInfo)
+
 	if exit {
 		log.Printf("%s, Exiting... Packets Dropped : %d . %s \n\nConnectionInfo : %v \n", util.ConnTerminatedFailedMsg, packetsDropped, util.ConnTerminatedMsg, connInfo)
 	} else {
 		log.Printf("\n#===== Failed to connect to : %s by client : %s . %s ======#\n\nConnectionInfo : %v \n\n", remoteAddress, clientName, util.ConnTerminatedMsg, connInfo)
 	}
+
 }
 
 func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay int) {
@@ -223,7 +235,7 @@ func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay in
 	waitChan := make(chan bool)
 
 	s := bufio.NewScanner(conn)
-	go packetTracker(delay, waitChan)
+	go packetTracker(clientName, delay, waitChan, conn)
 
 	for s.Scan() {
 
@@ -365,17 +377,27 @@ func handleCtrlC(c chan os.Signal, cancel context.CancelFunc) {
 	cancel()
 }
 
-func packetTracker(delay int, wait chan bool) {
+func packetTracker(clientName string, delay int, waitChan chan bool, conn net.Conn) {
 
 	extraWaitTime := 5 * time.Second
 	totalWaitTime := time.Duration(delay)*time.Millisecond + extraWaitTime
+	dropCounter, resetCounter := 0, 0
+
+	defer close(waitChan)
 
 	for {
 		select {
-		case <-wait:
-			log.Println("Received")
+		case <-waitChan:
+			resetCounter = 0
 		case <-time.After(totalWaitTime):
-			log.Println("Time out")
+			dropCounter++
+			resetCounter++
+			log.Println("Packet dropped. Wait timeout : ", conn.RemoteAddr().String())
+			if resetCounter == util.MaxDropPackets {
+				storeConnFailure(clientName, conn.RemoteAddr().String(), "", "Connection timed out.", 0, dropCounter, conn, true)
+				conn.Close()
+				return
+			}
 		}
 	}
 

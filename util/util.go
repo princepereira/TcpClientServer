@@ -12,7 +12,7 @@ import (
 
 const (
 	Version                  = "v15.11.2022"
-	MaxDropPackets           = 100
+	MaxDropPackets           = 3
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
 	ErrMsgConnAborted        = "An established connection was aborted"
@@ -73,13 +73,14 @@ const (
 )
 
 type ConnInfo struct {
-	ClientName    string `json:",omitempty"`
-	LocalAddess   string `json:",omitempty"`
-	RemoteAddress string `json:",omitempty"`
-	ServerInfo    string `json:",omitempty"`
-	RequestInfo   string `json:",omitempty"`
-	FailedReason  string `json:",omitempty"`
-	FailedTime    string `json:",omitempty"`
+	ClientName     string `json:",omitempty"`
+	LocalAddess    string `json:",omitempty"`
+	RemoteAddress  string `json:",omitempty"`
+	ServerInfo     string `json:",omitempty"`
+	RequestInfo    string `json:",omitempty"`
+	PacketsDropped int    `json:",omitempty"`
+	FailedReason   string `json:",omitempty"`
+	FailedTime     string `json:",omitempty"`
 }
 
 func PrintServerBanner(config map[string]string) {
