@@ -220,13 +220,16 @@ func storeConnFailure(clientName, remoteAddress, request, reason string, i, pack
 func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay int) {
 	firstMsg := true
 	var receivedMsg string
+	waitChan := make(chan bool)
 
 	s := bufio.NewScanner(conn)
+	go packetTracker(delay, waitChan)
 
 	for s.Scan() {
 
 		receivedMsg = string(s.Text())
 		log.Println("<<<<==== Received Message : " + receivedMsg)
+		waitChan <- true
 
 		if firstMsg {
 			// Just storing the information
@@ -360,4 +363,20 @@ func handleCtrlC(c chan os.Signal, cancel context.CancelFunc) {
 	log.Println("#===== Ctrl + C called ... Exiting in few seconds")
 	util.NoExitClient = false
 	cancel()
+}
+
+func packetTracker(delay int, wait chan bool) {
+
+	extraWaitTime := 5 * time.Second
+	totalWaitTime := time.Duration(delay)*time.Millisecond + extraWaitTime
+
+	for {
+		select {
+		case <-wait:
+			log.Println("Received")
+		case <-time.After(totalWaitTime):
+			log.Println("Time out")
+		}
+	}
+
 }
