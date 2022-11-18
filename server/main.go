@@ -109,6 +109,11 @@ func main() {
 		return
 	}
 
+	if args[util.AtribVersion] == util.ConstTrue {
+		fmt.Println(util.Version)
+		return
+	}
+
 	serverInfo := util.GetIPAddress()
 	args[util.AtribServerInfo] = serverInfo
 

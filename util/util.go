@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v15.11.2022"
+	Version                  = "v18.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -38,6 +38,7 @@ const (
 	AtribTimeoutPrestopWait = "-pw"
 	AtribIterations         = "-it"
 	AtribServerInfo         = "ServerInfo"
+	AtribVersion            = "-v"
 )
 
 var argKeys = map[string]bool{
@@ -52,6 +53,7 @@ var argKeys = map[string]bool{
 	AtribTimeoutKeepAlive:   true,
 	AtribIterations:         true,
 	AtribTimeoutPrestopWait: true,
+	AtribVersion:            true,
 }
 
 var (
@@ -141,6 +143,11 @@ func ValidateArgs() (map[string]string, error) {
 			}
 
 			if i == 1 && attrib == AtribHelp {
+				args[attrib] = "true"
+				return args, nil
+			}
+
+			if i == 1 && attrib == AtribVersion {
 				args[attrib] = "true"
 				return args, nil
 			}

@@ -18,8 +18,39 @@ import (
 	"time"
 )
 
-var failedCons []util.ConnInfo
+var allFailedCons map[int][]util.ConnInfo // Stores entire failed info
+var failedCons *failedConnsStruct         // Stores failed info for each iteration
 var serverInfoMap *sync.Map
+
+type failedConnsStruct struct {
+	failedCons []util.ConnInfo
+	mutex      *sync.Mutex
+}
+
+func (failedConns *failedConnsStruct) append(connInfo util.ConnInfo) {
+	failedConns.mutex.Lock()
+	defer failedConns.mutex.Unlock()
+	failedConns.failedCons = append(failedConns.failedCons, connInfo)
+}
+
+func (failedConns *failedConnsStruct) string() string {
+	failedConns.mutex.Lock()
+	defer failedConns.mutex.Unlock()
+	str := ""
+	for _, v := range failedConns.failedCons {
+		failure, err := json.MarshalIndent(v, "", "  ")
+		if err == nil {
+			str = str + "\n" + string(failure)
+		}
+	}
+	return str
+}
+
+func (failedConns *failedConnsStruct) size() int {
+	failedConns.mutex.Lock()
+	defer failedConns.mutex.Unlock()
+	return len(failedConns.failedCons)
+}
 
 func main() {
 
@@ -30,8 +61,13 @@ func main() {
 		return
 	}
 
-	if args[util.AtribHelp] == "true" {
+	if args[util.AtribHelp] == util.ConstTrue {
 		util.ClientHelp()
+		return
+	}
+
+	if args[util.AtribVersion] == util.ConstTrue {
+		fmt.Println(util.Version)
 		return
 	}
 
@@ -56,11 +92,12 @@ func main() {
 	go handleCtrlC(chanSignal, cancel)
 
 	address := fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
+	allFailedCons = make(map[int][]util.ConnInfo)
 
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
 
 		serverInfoMap = new(sync.Map)
-		failedCons = make([]util.ConnInfo, 0)
+		failedCons = &failedConnsStruct{failedCons: make([]util.ConnInfo, 0), mutex: &sync.Mutex{}}
 
 		log.Printf("\n\n######=========  ITERATION : %d STARTED =========######\n\n", turn)
 
@@ -73,22 +110,25 @@ func main() {
 			log.Fatal("No Proto defined, hence exiting...")
 		}
 
-		if len(failedCons) != 0 {
-			str := fmt.Sprintf("\n\n\n#======= Iteration : %d, No: of failed connections : %d", turn, len(failedCons))
+		time.Sleep(3 * time.Second)
+
+		failedConnCount := failedCons.size()
+		passedConnCount := conns - failedConnCount
+		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d \n", passedConnCount, failedConnCount, turn)
+
+		if failedConnCount != 0 {
+			str := fmt.Sprintf("\n#======= Iteration : %d, No: of failed connections : %d", turn, failedConnCount)
 			str = str + "\n\nFailed connections : \n\n"
 			str = str + "=============================\n"
-			for _, v := range failedCons {
-				failure, err := json.MarshalIndent(v, "", "  ")
-				if err == nil {
-					str = str + "\n" + string(failure)
-				}
-			}
+			str = str + "\n" + failedCons.string()
 			str = str + "\n\n=============================\n"
 			// str = str + fmt.Sprintf("\nClient Details : %s", util.GetIPAddress())
 			log.Println(str)
+			allFailedCons[turn] = failedCons.failedCons
 		} else {
 			log.Printf("\n\n######========= ALL CONNECTIONS ARE CLOSED GRACEFULLY FOR ITERATION : %d =========######\n\n", turn)
 		}
+
 	}
 
 	log.Println("\n\nExiting TCP Client ...")
@@ -127,7 +167,7 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 
 	time.Sleep(3 * time.Second)
 
-	wg.Add(conns - len(failedCons))
+	wg.Add(conns - len(failedCons.failedCons))
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
@@ -175,7 +215,7 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 
 	time.Sleep(3 * time.Second)
 
-	wg.Add(conns - len(failedCons))
+	wg.Add(conns - len(failedCons.failedCons))
 
 	for clientName, con := range connMap {
 		log.Println("#===== Starting ", clientName, " ======#")
@@ -209,7 +249,8 @@ func storeConnFailure(clientName, remoteAddress, request, reason string, i, pack
 		FailedTime:    failedTime,
 	}
 
-	failedCons = append(failedCons, connInfo)
+	failedCons.append(connInfo)
+
 	if exit {
 		log.Printf("%s, Exiting... Packets Dropped : %d . %s \n\nConnectionInfo : %v \n", util.ConnTerminatedFailedMsg, packetsDropped, util.ConnTerminatedMsg, connInfo)
 	} else {
