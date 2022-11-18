@@ -11,8 +11,8 @@ import (
 // we create a new custom metric of type counter
 var connectionStatus = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "http_request_get_user_status_count", // metric name
-		Help: "Count of status returned by user.",
+		Name: "http_request_get_connection_status", // metric name
+		Help: "Count of status returned for each connections and iterations.",
 	},
 	[]string{"ConnectionsSucceded", "ConnectionsFailed", "Iteration", "FaliledConnections"}, // labels
 )
