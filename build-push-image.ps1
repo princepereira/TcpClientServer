@@ -1,5 +1,6 @@
 # $tag = ":test"
-$tag = ":latest"
+# $tag = ":latest"
+$tag = ":prometheus"
 # $tag = ":stable"
 # $tag = ":WD2022"
 # $tag = ":WS2022"

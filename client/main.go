@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-var allFailedCons map[int][]util.ConnInfo // Stores entire failed info
-var failedCons *failedConnsStruct         // Stores failed info for each iteration
+// var allFailedCons map[int][]util.ConnInfo // Stores entire failed info
+var failedCons *failedConnsStruct // Stores failed info for each iteration
 var serverInfoMap *sync.Map
 
 type failedConnsStruct struct {
@@ -91,8 +91,12 @@ func main() {
 	signal.Notify(chanSignal, os.Interrupt, syscall.SIGTERM)
 	go handleCtrlC(chanSignal, cancel)
 
+	go util.StartPrometheus()
+
 	address := fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
-	allFailedCons = make(map[int][]util.ConnInfo)
+	// allFailedCons = make(map[int][]util.ConnInfo)
+
+	util.PublishConnStatusToPrometheus(0, 0, 0, "")
 
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
 
@@ -116,6 +120,8 @@ func main() {
 		passedConnCount := conns - failedConnCount
 		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d \n", passedConnCount, failedConnCount, turn)
 
+		util.PublishConnStatusToPrometheus(passedConnCount, failedConnCount, turn, failedCons.string())
+
 		if failedConnCount != 0 {
 			str := fmt.Sprintf("\n#======= Iteration : %d, No: of failed connections : %d", turn, failedConnCount)
 			str = str + "\n\nFailed connections : \n\n"
@@ -124,7 +130,7 @@ func main() {
 			str = str + "\n\n=============================\n"
 			// str = str + fmt.Sprintf("\nClient Details : %s", util.GetIPAddress())
 			log.Println(str)
-			allFailedCons[turn] = failedCons.failedCons
+			// allFailedCons[turn] = failedCons.failedCons
 		} else {
 			log.Printf("\n\n######========= ALL CONNECTIONS ARE CLOSED GRACEFULLY FOR ITERATION : %d =========######\n\n", turn)
 		}
