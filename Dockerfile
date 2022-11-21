@@ -7,4 +7,3 @@ COPY ./bins/client.exe ./
 COPY ./bins/server.exe ./
 EXPOSE 4444
 EXPOSE 4445
-# ENTRYPOINT ["server.exe", "-p", "4444", "-pr", "All"]

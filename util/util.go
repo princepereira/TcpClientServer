@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v18.11.2022"
+	Version                  = "v21.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -37,6 +37,7 @@ const (
 	AtribTimeoutKeepAlive   = "-tka"
 	AtribTimeoutPrestopWait = "-pw"
 	AtribIterations         = "-it"
+	AtribMaxDropThreshold   = "-mdt"
 	AtribServerInfo         = "ServerInfo"
 	AtribVersion            = "-v"
 )
@@ -54,11 +55,13 @@ var argKeys = map[string]bool{
 	AtribIterations:         true,
 	AtribTimeoutPrestopWait: true,
 	AtribVersion:            true,
+	AtribMaxDropThreshold:   true,
 }
 
 var (
 	PrestopWaitTimeout = 15 // In seconds
 	NoExitClient       = true
+	MaxDropThreshold   = 10
 )
 
 const (
@@ -114,12 +117,25 @@ func PrintClientBanner(config map[string]string) {
 	log.Printf("#         Reqs/Cons        : %s                  \n", config[AtribReqs])
 	log.Printf("#         Proto            : %s                  \n", config[AtribProto])
 	log.Printf("#         Iterations       : %s                  \n", config[AtribIterations])
+	log.Printf("#         MaxDropThreshold : %s                  \n", config[AtribMaxDropThreshold])
 	if config[AtribProto] == ConstTCP {
 		log.Printf("#         DisableKeepAlive : %s                  \n", config[AtribDisableKeepAlive])
 		log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
 	}
 	log.Println("#===========================================#")
 	log.Println(" ")
+}
+
+func SetMaxDropThreshold(val string) {
+	if val == "" {
+		return
+	}
+	intVal, err := strconv.Atoi(val)
+	if err != nil {
+		log.Println("MaxDropThreshold value passed is not an integer, so setting back to default value : ", MaxDropThreshold)
+		return
+	}
+	MaxDropThreshold = intVal
 }
 
 func ValidateArgs() (map[string]string, error) {
@@ -131,6 +147,7 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribTimeoutKeepAlive] = DefaultTimeoutKeepAlive
 	args[AtribTimeoutPrestopWait] = DefaultTimeoutPrestopWait
 	args[AtribIterations] = DefaultIterations
+	args[AtribMaxDropThreshold] = strconv.Itoa(MaxDropThreshold)
 
 	for i := 1; i < len(os.Args); i++ {
 
@@ -214,6 +231,9 @@ func ValidateValues(cs string, args map[string]string) error {
 	if _, err := strconv.Atoi(args[AtribTimeoutPrestopWait]); err != nil {
 		return fmt.Errorf("TimeoutPrestopWait (%s) should be a number. Error : %v", args[AtribTimeoutPrestopWait], err)
 	}
+	if _, err := strconv.Atoi(args[AtribMaxDropThreshold]); err != nil {
+		return fmt.Errorf("MaxDropThreshold (%s) should be a number. Error : %v", args[AtribMaxDropThreshold], err)
+	}
 	if _, err := strconv.Atoi(args[AtribIterations]); err != nil {
 		return fmt.Errorf("iterations (%s) should be a number. Error : %v", args[AtribIterations], err)
 	}
@@ -232,6 +252,7 @@ func ClientHelp() {
 	str = str + "   -d   : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds) \n"
 	str = str + "   -it  :     Number of iterations. Default: 1 \n"
 	str = str + "   -pr  :     Proto used. Options: TCP/UDP. Default: TCP \n"
+	str = str + "   -mdt :     MaxDropThreshold. Max time wait before consecutive drops \n"
 	str = str + "   -dka :     Disable KeepAlive. Options: True/False. Default: False \n"
 	str = str + "   -tka :     KeepAlive Time in milliseconds. Default: 15 seconds \n"
 	str = str + "\n#==============================#\n"

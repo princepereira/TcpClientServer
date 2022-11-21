@@ -82,6 +82,7 @@ func main() {
 	conns, _ := strconv.Atoi(args[util.AtribCons])
 	proto := args[util.AtribProto]
 	iter, _ := strconv.Atoi(args[util.AtribIterations])
+	util.SetMaxDropThreshold(args[util.AtribMaxDropThreshold])
 
 	wg := new(sync.WaitGroup)
 
@@ -151,13 +152,13 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 
 		udpServer, err := net.ResolveUDPAddr(proto, address)
 		if err != nil {
-			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, false)
+			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, nil, false)
 			continue
 		}
 
 		c, err := net.DialUDP(proto, nil, udpServer)
 		if err != nil {
-			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, false)
+			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, nil, false)
 			continue
 		}
 
@@ -197,7 +198,7 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 
 		c, err := net.DialTimeout(proto, address, util.DialTimeout)
 		if err != nil {
-			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, false)
+			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, nil, false)
 			continue
 		}
 
@@ -225,12 +226,16 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 	wg.Wait()
 }
 
-func storeConnFailure(clientName, remoteAddress, request, reason string, i, packetsDropped int, con net.Conn, exit bool) {
+func storeConnFailure(clientName, remoteAddress, request, reason string, i, packetsDropped int, con net.Conn, cancelPacketTracker context.CancelFunc, exit bool) {
 	t := time.Now()
 	failedTime := t.Format(time.RFC3339)
 	var serverInfo string
 	if info, ok := serverInfoMap.Load(clientName); ok {
 		serverInfo = info.(string)
+	}
+
+	if cancelPacketTracker != nil {
+		cancelPacketTracker()
 	}
 
 	var localAddress string
@@ -258,13 +263,13 @@ func storeConnFailure(clientName, remoteAddress, request, reason string, i, pack
 	}
 }
 
-func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay int) {
+func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay int, contextPacketTracker context.Context) {
 	firstMsg := true
 	var receivedMsg string
 	waitChan := make(chan bool)
 
 	s := bufio.NewScanner(conn)
-	go packetTracker(delay, waitChan)
+	go packetTracker(clientName, delay, waitChan, conn, contextPacketTracker)
 
 	for s.Scan() {
 
@@ -295,8 +300,9 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 	var counter int32 = 0
 	requests, _ := strconv.Atoi(args[util.AtribReqs])
 	delay, _ := strconv.Atoi(args[util.AtribDelay])
+	ctxPacketTracker, cancelPacketTracker := context.WithCancel(context.Background())
 
-	go serverMsghandler(c, clientName, &counter, delay)
+	go serverMsghandler(c, clientName, &counter, delay, ctxPacketTracker)
 
 	dropCounter, resetCounter := 0, 0
 
@@ -309,15 +315,15 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
-				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
 				return
 			}
 			if strings.Contains(sendErr.Error(), util.ErrMsgConnAborted) {
-				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
 				return
 			}
 			if sendErr.Error() == util.ErrMsgEOF {
-				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, true)
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
 				return
 			}
 			if strings.Contains(sendErr.Error(), util.ErrMsgListenClosed) {
@@ -329,7 +335,7 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
 			if resetCounter == util.MaxDropPackets {
-				storeConnFailure(clientName, remoteAddr, msgSent, "connection is broken.", i, dropCounter, c, true)
+				storeConnFailure(clientName, remoteAddr, msgSent, "connection is broken.", i, dropCounter, c, cancelPacketTracker, true)
 				return
 			}
 		} else {
@@ -346,6 +352,7 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 		time.Sleep(time.Duration(delay) * time.Millisecond)
 	}
 
+	cancelPacketTracker()
 	c.Close()
 }
 
@@ -356,8 +363,9 @@ func startUdpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 	var counter int32 = 0
 	requests, _ := strconv.Atoi(args[util.AtribReqs])
 	delay, _ := strconv.Atoi(args[util.AtribDelay])
+	ctxPacketTracker, cancelPacketTracker := context.WithCancel(context.Background())
 
-	go serverMsghandler(c, clientName, &counter, delay)
+	go serverMsghandler(c, clientName, &counter, delay, ctxPacketTracker)
 
 	dropCounter, resetCounter := 0, 0
 
@@ -376,7 +384,7 @@ func startUdpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			resetCounter++
 			log.Println("Packet dropped with ", clientName, " request : ", i)
 			if resetCounter == util.MaxDropPackets {
-				storeConnFailure(clientName, remoteAddr, msgSent, "connection is broken.", i, dropCounter, c, true)
+				storeConnFailure(clientName, remoteAddr, msgSent, "connection is broken.", i, dropCounter, c, cancelPacketTracker, true)
 				return
 			}
 		} else {
@@ -406,17 +414,32 @@ func handleCtrlC(c chan os.Signal, cancel context.CancelFunc) {
 	cancel()
 }
 
-func packetTracker(delay int, wait chan bool) {
+func packetTracker(clientName string, delay int, waitChan chan bool, conn net.Conn, contxt context.Context) {
 
 	extraWaitTime := 5 * time.Second
 	totalWaitTime := time.Duration(delay)*time.Millisecond + extraWaitTime
+	dropCounter, resetCounter := 0, 0
+
+	defer close(waitChan)
 
 	for {
 		select {
-		case <-wait:
-			log.Println("Received")
+		case <-waitChan:
+			resetCounter++
+			if resetCounter >= util.MaxDropThreshold {
+				resetCounter = 0
+				dropCounter = 0
+			}
 		case <-time.After(totalWaitTime):
-			log.Println("Time out")
+			dropCounter++
+			log.Println("Packet timeout : ", conn.RemoteAddr().String())
+			if dropCounter >= util.MaxDropThreshold {
+				storeConnFailure(clientName, conn.RemoteAddr().String(), "", "Connection timed out.", 0, dropCounter, conn, nil, true)
+				conn.Close()
+				return
+			}
+		case <-contxt.Done():
+			return
 		}
 	}
 
