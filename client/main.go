@@ -309,25 +309,19 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 	for i := 1; i <= requests; i++ {
 		if atomic.LoadInt32(&counter) == 1 {
 			// Connection is closed by server sent "Quit Message"
+			cancelPacketTracker()
 			return
 		}
 		msgSent := clientName + "- Req-" + strconv.Itoa(i) + "\n"
 		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
-			if strings.Contains(sendErr.Error(), util.ErrMsgConnForciblyClosed) {
-				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
-				return
-			}
-			if strings.Contains(sendErr.Error(), util.ErrMsgConnAborted) {
-				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
-				return
-			}
-			if sendErr.Error() == util.ErrMsgEOF {
-				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
-				return
-			}
 			if strings.Contains(sendErr.Error(), util.ErrMsgListenClosed) {
 				// Error message is already handled in server handler
+				cancelPacketTracker()
+				return
+			}
+			if util.IsConnClosed(sendErr.Error()) {
+				storeConnFailure(clientName, remoteAddr, msgSent, sendErr.Error(), i, dropCounter, c, cancelPacketTracker, true)
 				return
 			}
 			log.Println("#====== TCP Send Error : ", sendErr.Error())
@@ -346,6 +340,7 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 
 		if ctx.Err() != nil {
 			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", c.RemoteAddr().String(), util.ConnTerminatedMsg)
+			cancelPacketTracker()
 			return
 		}
 

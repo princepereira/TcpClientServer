@@ -71,8 +71,14 @@ func killHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	time.Sleep(time.Duration(util.PrestopWaitTimeout) * time.Second)
 	for remoteAddr, conn := range tcpConnCache.conns {
-		conn.Write([]byte(util.QuitMsg))
-		log.Println("Quit message send to ", remoteAddr)
+		for try := 1; try <= 5; try++ {
+			_, quitError := conn.Write([]byte(util.QuitMsg))
+			log.Println("Quit message send to ", remoteAddr, " QuitError : ", quitError, " Try :", try, " RemoteAddr:", remoteAddr)
+			if quitError != nil && util.IsConnClosed(quitError.Error()) {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 		tcpConnCache.remove(remoteAddr)
 	}
 	for remoteAddr, conn := range udpConnCache.conns {

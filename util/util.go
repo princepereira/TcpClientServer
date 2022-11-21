@@ -297,3 +297,19 @@ func GetIPAddress() string {
 
 	return hostDetails
 }
+
+func IsConnClosed(errMsg string) bool {
+	if strings.Contains(errMsg, ErrMsgConnForciblyClosed) {
+		return true
+	}
+	if strings.Contains(errMsg, ErrMsgConnAborted) {
+		return true
+	}
+	if errMsg == ErrMsgEOF {
+		return true
+	}
+	if strings.Contains(errMsg, ErrMsgListenClosed) {
+		return true
+	}
+	return false
+}
