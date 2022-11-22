@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v21.11.2022"
+	Version                  = "v22.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
