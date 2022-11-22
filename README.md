@@ -100,13 +100,14 @@ Eg : .\client.exe -i 127.0.0.1 -p 4444 -c 1 -r 10000 -d 1
 
 Parameters (Optional, Mandatory*):
 
-   -i   : (*) IP Address of the server
+   -i   : (*) IPv4/IPv6 Address of the server. 
    -p   : (*) Port number of the server
    -c   : (*) Number of clients/threads/connections
    -r   : (*) Number of requests per connection
    -d   : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds)
    -it  :     Number of iterations. Default: 1
    -pr  :     Proto used. Options: TCP/UDP. Default: TCP
+   -mdt :     MaxDropThreshold. Max time wait before consecutive drops
    -dka :     Disable KeepAlive. Options: True/False. Default: False
    -tka :     KeepAlive Time in milliseconds. Default: 15 seconds
 

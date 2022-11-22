@@ -92,7 +92,15 @@ func main() {
 	signal.Notify(chanSignal, os.Interrupt, syscall.SIGTERM)
 	go handleCtrlC(chanSignal, cancel)
 
-	address := fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
+	var address string
+
+	if strings.Contains(args[util.AtribIpAddr], ":") {
+		// For IPv6 support
+		address = fmt.Sprintf("[%s]:%s", args[util.AtribIpAddr], args[util.AtribPort])
+	} else {
+		address = fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
+	}
+
 	allFailedCons = make(map[int][]util.ConnInfo)
 
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {

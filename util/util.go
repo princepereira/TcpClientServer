@@ -245,7 +245,7 @@ func ClientHelp() {
 	str = str + "Format : .\\client.exe -i <IP> -p <Port> -c <Number of Connections> -r <Number of Requests/Connection> -d <Delay (in ms) between each request> \n"
 	str = str + "\nEg : .\\client.exe -i 127.0.0.1 -p 4444 -c 1 -r 10000 -d 1 \n"
 	str = str + "\nParameters (Optional, Mandatory*): \n\n"
-	str = str + "   -i   : (*) IP Address of the server \n"
+	str = str + "   -i   : (*) IPv4/IPv6 Address of the server \n"
 	str = str + "   -p   : (*) Port number of the server \n"
 	str = str + "   -c   : (*) Number of clients/threads/connections \n"
 	str = str + "   -r   : (*) Number of requests per connection \n"
