@@ -423,7 +423,7 @@ func packetTracker(clientName string, delay int, waitChan chan bool, conn net.Co
 	totalWaitTime := time.Duration(delay)*time.Millisecond + extraWaitTime
 	dropCounter, resetCounter := 0, 0
 
-	defer close(waitChan)
+	// defer close(waitChan)
 
 	for {
 		select {
