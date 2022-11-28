@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"princepereira/TcpClientServer/util"
 	"strconv"
 	"strings"
@@ -184,6 +185,9 @@ func invokeTcpServer(proto, address, serverInfo string) {
 }
 
 func handleTcpConnection(conn net.Conn, serverInfo string) {
+	// Replacing for now
+	hostName, _ := os.Hostname()
+	serverInfo = fmt.Sprintf("%s - [ %s -> %s ]", hostName, conn.RemoteAddr().String(), conn.LocalAddr().String())
 	defer conn.Close()
 	defer tcpConnCache.remove(conn.RemoteAddr().String())
 	defer log.Println("TCP connection gracefully closed for client ", conn.RemoteAddr().String())
@@ -250,6 +254,6 @@ func udpServers(listen *net.UDPConn, serverInfo string, index int) {
 }
 
 func constructServerResp(receivedMsg, serverInfo string) string {
-	sentMsg := fmt.Sprintf("Req: %s, Resp: %s\n", receivedMsg, serverInfo)
+	sentMsg := fmt.Sprintf("Req: %s|Resp: %s\n", receivedMsg, serverInfo)
 	return sentMsg
 }

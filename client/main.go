@@ -170,7 +170,7 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 			continue
 		}
 
-		log.Println("#===== UDPClient Port Opened : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
+		log.Printf("#===== [OPENED] %s - Local:%s, Remote:%s  ======#\n", clientName, c.LocalAddr().String(), c.RemoteAddr().String())
 		connMap[clientName] = c
 	}
 
@@ -218,7 +218,7 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 			}
 		}
 
-		log.Println("#===== TCPClient Connected : ", clientName, ", LocalAddress : ", c.LocalAddr().String(), ",  RemoteAddress : ", c.RemoteAddr().String(), " ======#")
+		log.Printf("#===== [CONNECTED] %s - Local:%s, Remote:%s  ======#\n", clientName, c.LocalAddr().String(), c.RemoteAddr().String())
 		connMap[clientName] = c
 	}
 
@@ -279,10 +279,19 @@ func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay in
 	s := bufio.NewScanner(conn)
 	go packetTracker(clientName, delay, waitChan, conn, contextPacketTracker)
 
+	clientInfo := fmt.Sprintf("[ %s -> %s ]", conn.LocalAddr().String(), conn.RemoteAddr().String())
+
 	for s.Scan() {
 
 		receivedMsg = string(s.Text())
-		log.Println("<<<<==== Received Message : " + receivedMsg)
+		items := strings.Split(receivedMsg, "|")
+		var req, resp string
+		req = items[0]
+		if len(items) > 0 {
+			resp = items[1]
+		}
+		msgToPrint := fmt.Sprintf("  Client: %s\n  %s\n  %s \n\n", clientInfo, req, resp)
+		log.Println("<<<<==== Received :\n\n" + msgToPrint)
 		waitChan <- true
 
 		if firstMsg {
@@ -344,7 +353,7 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			resetCounter = 0
 		}
 
-		log.Println("====>>>> TCP Request Sent : " + msgSent)
+		log.Println("====>>>> Sent : " + msgSent)
 
 		if ctx.Err() != nil {
 			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", c.RemoteAddr().String(), util.ConnTerminatedMsg)
@@ -394,7 +403,7 @@ func startUdpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			resetCounter = 0
 		}
 
-		log.Println("====>>>> UDP Request Sent : " + msgSent)
+		log.Println("====>>>> Sent : " + msgSent)
 
 		if ctx.Err() != nil {
 			log.Println(util.ConnTerminatedSuccessMsg, "Connection terminated by ctrl+c signal : ", c.RemoteAddr().String(), util.ConnTerminatedMsg)

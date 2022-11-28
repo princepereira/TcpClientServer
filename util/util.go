@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v23.11.2022"
+	Version                  = "v28.11.2022"
 	MaxDropPackets           = 100
 	KillPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -90,7 +90,7 @@ type ConnInfo struct {
 func PrintServerBanner(config map[string]string) {
 	log.Println(" ")
 	log.Println("#===========================================#")
-	log.Println("#         Title       : L4 Server          ")
+	log.Println("#         Title       : Network Monitor Server          ")
 	log.Printf("#         Version     : %s          \n", Version)
 	log.Printf("#         Proto       : %s        \n", config[AtribProto])
 	if config[AtribProto] == ConstAll {
@@ -110,9 +110,15 @@ func PrintServerBanner(config map[string]string) {
 func PrintClientBanner(config map[string]string) {
 	log.Println(" ")
 	log.Println("#===========================================#")
-	log.Println("#         Title            : L4 Client          ")
+	log.Println("#         Title            : Network Monitor Client          ")
 	log.Printf("#         Version          : %s          \n", Version)
-	log.Printf("#         Host             : %s:%s               \n", config[AtribIpAddr], config[AtribPort])
+	if strings.Contains(config[AtribIpAddr], ":") {
+		// printing ipv6 host
+		log.Printf("#         Host             : [%s]:%s               \n", config[AtribIpAddr], config[AtribPort])
+	} else {
+		// printing ipv4 host
+		log.Printf("#         Host             : %s:%s               \n", config[AtribIpAddr], config[AtribPort])
+	}
 	log.Printf("#         Connections      : %s                  \n", config[AtribCons])
 	log.Printf("#         Reqs/Cons        : %s                  \n", config[AtribReqs])
 	log.Printf("#         Proto            : %s                  \n", config[AtribProto])
@@ -199,14 +205,7 @@ func isValidBool(val string) bool {
 }
 
 func ValidateValues(cs string, args map[string]string) error {
-	// if len(args) != 8 {
-	// 	if cs == "client" {
-	// 		ClientHelp()
-	// 	} else {
-	// 		ServerHelp()
-	// 	}
-	// 	return fmt.Errorf("no sufficient args")
-	// }
+
 	if _, err := strconv.Atoi(args[AtribPort]); err != nil {
 		return fmt.Errorf("port (%s) should be a number. Error : %v", args[AtribPort], err)
 	}
