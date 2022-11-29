@@ -287,7 +287,7 @@ func serverMsghandler(conn net.Conn, clientName string, counter *int32, delay in
 		items := strings.Split(receivedMsg, "|")
 		var req, resp string
 		req = items[0]
-		if len(items) > 0 {
+		if len(items) > 1 {
 			resp = items[1]
 		}
 		msgToPrint := fmt.Sprintf("  Client: %s\n  %s\n  %s \n\n", clientInfo, req, resp)
