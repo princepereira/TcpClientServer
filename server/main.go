@@ -70,9 +70,15 @@ func sendFailedStatus(w http.ResponseWriter, probe string) {
 	fmt.Fprint(w, "Custom 404 for "+probe)
 }
 
+func toggleProbeHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Toggle handler called ...")
+	util.FailReadinessProbe = !util.FailReadinessProbe
+	log.Printf("Probe flag is toggled to : %v", util.FailReadinessProbe)
+}
+
 func readinessProbeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Readiness handler called ...")
-	if util.FailProbe {
+	if util.FailReadinessProbe {
 		log.Printf("Readiness is set to fail ...")
 		sendFailedStatus(w, "Readiness Probe")
 		return
@@ -83,7 +89,7 @@ func readinessProbeHandler(w http.ResponseWriter, req *http.Request) {
 
 func livenessProbeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Liveness handler called ...")
-	if util.FailProbe {
+	if util.FailLivenessProbe {
 		log.Printf("Liveness is set to fail ...")
 		sendFailedStatus(w, "Liveness Probe")
 		return
@@ -96,7 +102,8 @@ func preStopHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("preStopHandler handler called... Waiting for %d seconds...\n", util.PrestopWaitTimeout)
 	log.Printf("Faile probe is set to true")
 
-	util.FailProbe = true
+	util.FailReadinessProbe = true
+	util.FailLivenessProbe = true
 
 	if listener != nil {
 		listener.Close()
@@ -134,6 +141,8 @@ func startHttpHandler() {
 	log.Println("Readiness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/liveness", livenessProbeHandler)
 	log.Println("Liveness Probe started on port : ", util.HttpPort)
+	http.HandleFunc("/toggleprobe", toggleProbeHandler)
+	log.Println("Toggle Probe started on port : ", util.HttpPort)
 	http.ListenAndServe(fmt.Sprintf(":%d", util.HttpPort), nil)
 }
 

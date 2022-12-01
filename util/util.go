@@ -62,7 +62,8 @@ var (
 	PrestopWaitTimeout = 15 // In seconds
 	NoExitClient       = true
 	MaxDropThreshold   = 10
-	FailProbe          = false
+	FailReadinessProbe = false
+	FailLivenessProbe  = false
 )
 
 const (
