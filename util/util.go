@@ -13,7 +13,7 @@ import (
 const (
 	Version                  = "v28.11.2022"
 	MaxDropPackets           = 100
-	KillPort                 = 8090
+	HttpPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
 	ErrMsgConnAborted        = "An established connection was aborted"
 	ErrMsgEOF                = "EOF"
@@ -62,6 +62,7 @@ var (
 	PrestopWaitTimeout = 15 // In seconds
 	NoExitClient       = true
 	MaxDropThreshold   = 10
+	FailProbe          = false
 )
 
 const (

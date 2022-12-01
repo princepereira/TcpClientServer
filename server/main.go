@@ -65,8 +65,39 @@ func (c udpConnStruct) remove(remoteAdd string) *net.UDPAddr {
 	return conn
 }
 
-func killHandler(w http.ResponseWriter, req *http.Request) {
-	log.Printf("Kill handler called... Waiting for %d seconds...\n", util.PrestopWaitTimeout)
+func sendFailedStatus(w http.ResponseWriter, probe string) {
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprint(w, "Custom 404 for "+probe)
+}
+
+func readinessProbeHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Readiness handler called ...")
+	if util.FailProbe {
+		log.Printf("Readiness is set to fail ...")
+		sendFailedStatus(w, "Readiness Probe")
+		return
+	}
+	fmt.Fprintf(w, "Readiness probe passed")
+	log.Printf("Readiness probe passed...")
+}
+
+func livenessProbeHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Liveness handler called ...")
+	if util.FailProbe {
+		log.Printf("Liveness is set to fail ...")
+		sendFailedStatus(w, "Liveness Probe")
+		return
+	}
+	fmt.Fprintf(w, "Liveness probe passed")
+	log.Printf("Liveness probe passed...")
+}
+
+func preStopHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("preStopHandler handler called... Waiting for %d seconds...\n", util.PrestopWaitTimeout)
+	log.Printf("Faile probe is set to true")
+
+	util.FailProbe = true
+
 	if listener != nil {
 		listener.Close()
 	}
@@ -96,10 +127,14 @@ func killHandler(w http.ResponseWriter, req *http.Request) {
 	quitServer <- true
 }
 
-func startKillServer() {
-	http.HandleFunc("/kill", killHandler)
-	log.Println("KillHandler started on port : ", util.KillPort)
-	http.ListenAndServe(fmt.Sprintf(":%d", util.KillPort), nil)
+func startHttpHandler() {
+	http.HandleFunc("/kill", preStopHandler)
+	log.Println("PreStopHandler started on port : ", util.HttpPort)
+	http.HandleFunc("/readiness", readinessProbeHandler)
+	log.Println("Readiness Probe started on port : ", util.HttpPort)
+	http.HandleFunc("/liveness", livenessProbeHandler)
+	log.Println("Liveness Probe started on port : ", util.HttpPort)
+	http.ListenAndServe(fmt.Sprintf(":%d", util.HttpPort), nil)
 }
 
 func main() {
@@ -130,7 +165,7 @@ func main() {
 	address := ":" + args[util.AtribPort]
 	util.PrestopWaitTimeout, _ = strconv.Atoi(args[util.AtribTimeoutPrestopWait])
 
-	go startKillServer()
+	go startHttpHandler()
 
 	switch proto {
 	case util.ConstTCP:
