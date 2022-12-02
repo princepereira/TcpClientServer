@@ -102,13 +102,16 @@ func preStopHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("preStopHandler handler called... Waiting for %d seconds...\n", util.PrestopWaitTimeout)
 	log.Printf("Faile probe is set to true")
 
-	util.FailReadinessProbe = true
-	util.FailLivenessProbe = true
-
 	if listener != nil {
 		listener.Close()
 	}
+
+	log.Println("Prestop hook waiting at shutdown wait timeout for :", util.PrestopWaitTimeout, " seconds.")
 	time.Sleep(time.Duration(util.PrestopWaitTimeout) * time.Second)
+
+	util.FailReadinessProbe = true
+	util.FailLivenessProbe = true
+
 	for remoteAddr, conn := range tcpConnCache.conns {
 		for try := 1; try <= 5; try++ {
 			_, quitError := conn.Write([]byte(util.QuitMsg))
@@ -126,7 +129,8 @@ func preStopHandler(w http.ResponseWriter, req *http.Request) {
 		udpConnCache.remove(remoteAddr)
 	}
 	fmt.Fprintf(w, "All connections are killed\n")
-	time.Sleep(15 * time.Second)
+	log.Println("Prestop hook waiting at application timeout for :", util.ApplicationWaitTimeout, " seconds.")
+	time.Sleep(time.Duration(util.ApplicationWaitTimeout) * time.Second)
 	if udpListener != nil {
 		udpListener.Close()
 	}
@@ -173,6 +177,7 @@ func main() {
 	proto := args[util.AtribProto]
 	address := ":" + args[util.AtribPort]
 	util.PrestopWaitTimeout, _ = strconv.Atoi(args[util.AtribTimeoutPrestopWait])
+	util.ApplicationWaitTimeout, _ = strconv.Atoi(args[util.AtribTimeoutApplicationWait])
 
 	go startHttpHandler()
 
