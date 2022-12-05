@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	Version                  = "v28.11.2022"
+	Version                  = "v02.12.2022"
 	MaxDropPackets           = 100
-	KillPort                 = 8090
+	HttpPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
 	ErrMsgConnAborted        = "An established connection was aborted"
 	ErrMsgEOF                = "EOF"
@@ -26,55 +26,61 @@ const (
 )
 
 const (
-	AtribHelp               = "-h"
-	AtribIpAddr             = "-i"
-	AtribPort               = "-p"
-	AtribCons               = "-c"
-	AtribReqs               = "-r"
-	AtribDelay              = "-d"
-	AtribProto              = "-pr"
-	AtribDisableKeepAlive   = "-dka"
-	AtribTimeoutKeepAlive   = "-tka"
-	AtribTimeoutPrestopWait = "-pw"
-	AtribIterations         = "-it"
-	AtribMaxDropThreshold   = "-mdt"
-	AtribServerInfo         = "ServerInfo"
-	AtribVersion            = "-v"
+	AtribHelp                   = "-h"
+	AtribIpAddr                 = "-i"
+	AtribPort                   = "-p"
+	AtribCons                   = "-c"
+	AtribReqs                   = "-r"
+	AtribDelay                  = "-d"
+	AtribProto                  = "-pr"
+	AtribDisableKeepAlive       = "-dka"
+	AtribTimeoutKeepAlive       = "-tka"
+	AtribTimeoutPrestopWait     = "-swt"
+	AtribTimeoutApplicationWait = "-awt"
+	AtribIterations             = "-it"
+	AtribMaxDropThreshold       = "-mdt"
+	AtribServerInfo             = "ServerInfo"
+	AtribVersion                = "-v"
 )
 
 var argKeys = map[string]bool{
-	AtribHelp:               true,
-	AtribIpAddr:             true,
-	AtribPort:               true,
-	AtribCons:               true,
-	AtribReqs:               true,
-	AtribDelay:              true,
-	AtribProto:              true,
-	AtribDisableKeepAlive:   true,
-	AtribTimeoutKeepAlive:   true,
-	AtribIterations:         true,
-	AtribTimeoutPrestopWait: true,
-	AtribVersion:            true,
-	AtribMaxDropThreshold:   true,
+	AtribHelp:                   true,
+	AtribIpAddr:                 true,
+	AtribPort:                   true,
+	AtribCons:                   true,
+	AtribReqs:                   true,
+	AtribDelay:                  true,
+	AtribProto:                  true,
+	AtribDisableKeepAlive:       true,
+	AtribTimeoutKeepAlive:       true,
+	AtribIterations:             true,
+	AtribTimeoutPrestopWait:     true,
+	AtribTimeoutApplicationWait: true,
+	AtribVersion:                true,
+	AtribMaxDropThreshold:       true,
 }
 
 var (
-	PrestopWaitTimeout = 15 // In seconds
-	NoExitClient       = true
-	MaxDropThreshold   = 10
+	PrestopWaitTimeout     = 15 // In seconds
+	ApplicationWaitTimeout = 15 // In seconds
+	NoExitClient           = true
+	MaxDropThreshold       = 10
+	FailReadinessProbe     = false
+	FailLivenessProbe      = false
 )
 
 const (
-	ConstFalse                = "false"
-	ConstTrue                 = "true"
-	ConstTCP                  = "tcp"
-	ConstUDP                  = "udp"
-	ConstAll                  = "all"
-	DefaultProto              = ConstTCP
-	DefaultDisableKeepAlive   = ConstFalse
-	DefaultTimeoutKeepAlive   = "15000"
-	DefaultTimeoutPrestopWait = "5"
-	DefaultIterations         = "1"
+	ConstFalse                    = "false"
+	ConstTrue                     = "true"
+	ConstTCP                      = "tcp"
+	ConstUDP                      = "udp"
+	ConstAll                      = "all"
+	DefaultProto                  = ConstTCP
+	DefaultDisableKeepAlive       = ConstFalse
+	DefaultTimeoutKeepAlive       = "15000"
+	DefaultTimeoutPrestopWait     = "5"
+	DefaultTimeoutApplicationWait = "15"
+	DefaultIterations             = "1"
 )
 
 type ConnInfo struct {
@@ -90,19 +96,20 @@ type ConnInfo struct {
 func PrintServerBanner(config map[string]string) {
 	log.Println(" ")
 	log.Println("#===========================================#")
-	log.Println("#         Title       : Network Monitor Server          ")
-	log.Printf("#         Version     : %s          \n", Version)
-	log.Printf("#         Proto       : %s        \n", config[AtribProto])
+	log.Println("#         Title            : Network Monitor Server          ")
+	log.Printf("#         Version          : %s          \n", Version)
+	log.Printf("#         Proto            : %s        \n", config[AtribProto])
 	if config[AtribProto] == ConstAll {
-		log.Printf("#         TcpPort     : %s               \n", config[AtribPort])
+		log.Printf("#         TcpPort          : %s               \n", config[AtribPort])
 		port, _ := strconv.Atoi(config[AtribPort])
 		port++
-		log.Printf("#         UdpPort     : %s               \n", strconv.Itoa(port))
+		log.Printf("#         UdpPort          : %s               \n", strconv.Itoa(port))
 	} else {
-		log.Printf("#         Port        : %s               \n", config[AtribPort])
+		log.Printf("#         Port             : %s               \n", config[AtribPort])
 	}
-	log.Printf("#         Server      : %s               \n", config[AtribServerInfo])
-	log.Printf("#         PrestopWait : %s               \n", config[AtribTimeoutPrestopWait])
+	log.Printf("#         Server           : %s               \n", config[AtribServerInfo])
+	log.Printf("#         ShutdownWait     : %s               \n", config[AtribTimeoutPrestopWait])
+	log.Printf("#         ApplicationWait  : %s               \n", config[AtribTimeoutApplicationWait])
 	log.Println("#===========================================#")
 	log.Println(" ")
 }
@@ -152,6 +159,7 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribDisableKeepAlive] = DefaultDisableKeepAlive
 	args[AtribTimeoutKeepAlive] = DefaultTimeoutKeepAlive
 	args[AtribTimeoutPrestopWait] = DefaultTimeoutPrestopWait
+	args[AtribTimeoutApplicationWait] = DefaultTimeoutApplicationWait
 	args[AtribIterations] = DefaultIterations
 	args[AtribMaxDropThreshold] = strconv.Itoa(MaxDropThreshold)
 
@@ -230,6 +238,9 @@ func ValidateValues(cs string, args map[string]string) error {
 	if _, err := strconv.Atoi(args[AtribTimeoutPrestopWait]); err != nil {
 		return fmt.Errorf("TimeoutPrestopWait (%s) should be a number. Error : %v", args[AtribTimeoutPrestopWait], err)
 	}
+	if _, err := strconv.Atoi(args[AtribTimeoutApplicationWait]); err != nil {
+		return fmt.Errorf("TimeoutApplicationWait (%s) should be a number. Error : %v", args[AtribTimeoutApplicationWait], err)
+	}
 	if _, err := strconv.Atoi(args[AtribMaxDropThreshold]); err != nil {
 		return fmt.Errorf("MaxDropThreshold (%s) should be a number. Error : %v", args[AtribMaxDropThreshold], err)
 	}
@@ -265,7 +276,8 @@ func ServerHelp() {
 	str = str + "\nParameters (Optional, Mandatory*): \n\n"
 	str = str + "   -p   : (*) Port number of the server \n"
 	str = str + "   -pr  :     Proto used. Options: TCP/UDP/All. Default: TCP \n"
-	str = str + "   -pw  :     Timeout for prestop action in seconds. \n"
+	str = str + "   -swt :     ShutdownWaitTimeout before prestop action in seconds. Default 15 seconds\n"
+	str = str + "   -awt :     ApplicationWaitTimeout for cleanup wait in seconds. Default 15 seconds\n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
 }
