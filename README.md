@@ -76,7 +76,8 @@ Parameters (Optional, Mandatory*):
 
    -p   : (*) Port number of the server
    -pr  :     Proto used. Options: TCP/UDP/All. Default: TCP
-   -pw  :     Timeout for prestop action in seconds.
+   -swt :     ShutdownTimeout for prestop action in seconds.
+   -awt :     ApplicationTimeout for prestop action in seconds.
 
 #==============================#
 ```
