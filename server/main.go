@@ -70,10 +70,23 @@ func sendFailedStatus(w http.ResponseWriter, probe string) {
 	fmt.Fprint(w, "Custom 404 for "+probe)
 }
 
+func apiListHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("API List handler called ...")
+	str := "APIs Supported : \n"
+	str = str + "  <IP>:8090/list \n"
+	str = str + "  <IP>:8090/kill \n"
+	str = str + "  <IP>:8090/readiness \n"
+	str = str + "  <IP>:8090/liveness \n"
+	str = str + "  <IP>:8090/toggleprobe \n"
+	str = str + "  <IP>:8090/curl?<ServiceIP:ServicePort> \n"
+	fmt.Fprintln(w, str)
+}
+
 func toggleProbeHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("Toggle handler called ...")
 	util.FailReadinessProbe = !util.FailReadinessProbe
 	log.Printf("Probe flag is toggled to : %v", util.FailReadinessProbe)
+	fmt.Fprintf(w, "Probe flag is toggled to : %v", util.FailReadinessProbe)
 }
 
 func readinessProbeHandler(w http.ResponseWriter, req *http.Request) {
@@ -96,6 +109,24 @@ func livenessProbeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	fmt.Fprintf(w, "Liveness probe passed")
 	log.Printf("Liveness probe passed...")
+}
+
+func curlHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Curl handler called ...")
+	uri := req.URL.Query().Get("uri")
+	log.Println("Received URI : ", uri)
+	for i := 0; i < 3; i++ {
+		conn, err := net.DialTimeout("tcp", uri, util.DialTimeout)
+		if err == nil && conn != nil {
+			log.Printf("Dial to %s is success at try : %d", uri, i)
+			fmt.Fprintf(w, "Success")
+			return
+		}
+		time.Sleep(2 * time.Second)
+	}
+	log.Printf("Dial to %s is failed.", uri)
+	w.WriteHeader(http.StatusBadGateway)
+	fmt.Fprint(w, "Failed to connect "+uri)
 }
 
 func preStopHandler(w http.ResponseWriter, req *http.Request) {
@@ -149,6 +180,10 @@ func startHttpHandler() {
 	log.Println("Liveness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/toggleprobe", toggleProbeHandler)
 	log.Println("Toggle Probe started on port : ", util.HttpPort)
+	http.HandleFunc("/curl", curlHandler)
+	log.Println("Curl handler started on port : ", util.HttpPort)
+	http.HandleFunc("/list", apiListHandler)
+	log.Println("API list handler started on port : ", util.HttpPort)
 	http.ListenAndServe(fmt.Sprintf(":%d", util.HttpPort), nil)
 }
 
