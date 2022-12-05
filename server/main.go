@@ -112,6 +112,8 @@ func preStopHandler(w http.ResponseWriter, req *http.Request) {
 	util.FailReadinessProbe = true
 	util.FailLivenessProbe = true
 
+	time.Sleep(time.Duration(util.ApplicationWaitTimeout) * time.Second)
+
 	for remoteAddr, conn := range tcpConnCache.conns {
 		for try := 1; try <= 5; try++ {
 			_, quitError := conn.Write([]byte(util.QuitMsg))
@@ -130,7 +132,7 @@ func preStopHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	fmt.Fprintf(w, "All connections are killed\n")
 	log.Println("Prestop hook waiting at application timeout for :", util.ApplicationWaitTimeout, " seconds.")
-	time.Sleep(time.Duration(util.ApplicationWaitTimeout) * time.Second)
+	time.Sleep(15 * time.Second)
 	if udpListener != nil {
 		udpListener.Close()
 	}
