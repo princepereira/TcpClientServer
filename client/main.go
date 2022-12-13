@@ -91,6 +91,7 @@ func main() {
 	chanSignal := make(chan os.Signal, 1)
 	signal.Notify(chanSignal, os.Interrupt, syscall.SIGTERM)
 	go handleCtrlC(chanSignal, cancel)
+	go util.StartPrometheus()
 
 	var address string
 
@@ -101,6 +102,7 @@ func main() {
 		address = fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
 	}
 
+	util.PublishConnStatusToPrometheus(0, 0, 0, 0)
 	allFailedCons = make(map[int][]util.ConnInfo)
 
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
@@ -109,6 +111,7 @@ func main() {
 		failedCons = &failedConnsStruct{failedCons: make([]util.ConnInfo, 0), mutex: &sync.Mutex{}}
 
 		log.Printf("\n\n######=========  ITERATION : %d STARTED =========######\n\n", turn)
+		util.PublishConnStatusToPrometheus(conns, 0, 0, turn)
 
 		switch proto {
 		case util.ConstTCP:
@@ -124,6 +127,8 @@ func main() {
 		failedConnCount := failedCons.size()
 		passedConnCount := conns - failedConnCount
 		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d \n", passedConnCount, failedConnCount, turn)
+
+		util.PublishConnStatusToPrometheus(conns, passedConnCount, failedConnCount, turn)
 
 		if failedConnCount != 0 {
 			str := fmt.Sprintf("\n#======= Iteration : %d, No: of failed connections : %d", turn, failedConnCount)
