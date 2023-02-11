@@ -57,6 +57,11 @@ docker pull princepereira/tcp-client-server:Windows2022
 docker pull princepereira/tcp-client-server:WindowsServer2022
 ```
 
+#### Compatibe Images
+```
+Windows Server 2019 : princepereira/tcp-client-server:ws2019
+Windows Server 2022 : princepereira/tcp-client-server:WS2022
+```
 #### Run Server: 
 ```
 .\server.exe -p 4444
