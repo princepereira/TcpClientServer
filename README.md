@@ -61,6 +61,7 @@ docker pull princepereira/tcp-client-server:WindowsServer2022
 ```
 Windows Server 2019 : princepereira/tcp-client-server:ws2019
 Windows Server 2022 : princepereira/tcp-client-server:WS2022
+Ubuntu 18.04        : princepereira/tcp-client-server:ub1804
 ```
 #### Run Server: 
 ```
