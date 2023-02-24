@@ -1,0 +1,15 @@
+FROM ubuntu:18.04
+# Update Ubuntu Software repository
+RUN apt update
+RUN apt upgrade -y
+
+# Install nginx, php-fpm and supervisord from ubuntu repository
+RUN rm -rf /var/lib/apt/lists/*
+RUN apt clean
+
+COPY ./bins/client /client
+COPY ./bins/server /server
+WORKDIR /
+CMD ["./server", "-p", "4444", "-pr", "All"]
+EXPOSE 4444
+EXPOSE 4445
