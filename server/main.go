@@ -78,6 +78,9 @@ func apiListHandler(w http.ResponseWriter, req *http.Request) {
 	str = str + "  <IP>:8090/readiness \n"
 	str = str + "  <IP>:8090/liveness \n"
 	str = str + "  <IP>:8090/toggleprobe \n"
+	str = str + "  <IP>:8090/failreadinessprobe \n"
+	str = str + "  <IP>:8090/passreadinessprobe \n"
+	str = str + "  <IP>:2112/metrics \n"
 	str = str + "  <IP>:8090/telnet?uri=<ServiceIP:ServicePort> \n"
 	fmt.Fprintln(w, str)
 }
@@ -87,6 +90,24 @@ func toggleProbeHandler(w http.ResponseWriter, req *http.Request) {
 	util.FailReadinessProbe = !util.FailReadinessProbe
 	log.Printf("Probe flag is toggled to : %v", util.FailReadinessProbe)
 	fmt.Fprintf(w, "Probe flag is toggled to : %v", util.FailReadinessProbe)
+}
+
+func failReadinessProbeHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("failReadinessProbeHandler called ...")
+	if !util.FailReadinessProbe {
+		util.FailReadinessProbe = true
+	}
+	log.Printf("ReadinessProbe will fail : %v", util.FailReadinessProbe)
+	fmt.Fprintf(w, "ReadinessProbe will fail : %v", util.FailReadinessProbe)
+}
+
+func passReadinessProbeHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("passReadinessProbeHandler called ...")
+	if util.FailReadinessProbe {
+		util.FailReadinessProbe = false
+	}
+	log.Printf("ReadinessProbe will fail : %v", util.FailReadinessProbe)
+	fmt.Fprintf(w, "ReadinessProbe will fail : %v", util.FailReadinessProbe)
 }
 
 func readinessProbeHandler(w http.ResponseWriter, req *http.Request) {
@@ -180,6 +201,10 @@ func startHttpHandler() {
 	log.Println("Liveness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/toggleprobe", toggleProbeHandler)
 	log.Println("Toggle Probe started on port : ", util.HttpPort)
+	http.HandleFunc("/failreadinessprobe", failReadinessProbeHandler)
+	log.Println("Fail Redainess Probe started on port : ", util.HttpPort)
+	http.HandleFunc("/passreadinessprobe", passReadinessProbeHandler)
+	log.Println("Pass Redainess Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/telnet", telnetHandler)
 	log.Println("Telnet handler started on port : ", util.HttpPort)
 	http.HandleFunc("/list", apiListHandler)

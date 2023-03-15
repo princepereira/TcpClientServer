@@ -122,6 +122,18 @@ Parameters (Optional, Mandatory*):
 
 ```
 
+#### APIS Supported:
+```
+List APIS                    : <IP>:8090/list
+Prestop Hook                 : <IP>:8090/kill
+Check Readiness Probe Status : <IP>:8090/readiness
+Check Liveness Probe Status  : <IP>:8090/liveness
+Toggle Probe                 : <IP>:8090/toggleprobe
+Fail Readiness Probe         : <IP>:8090/failreadinessprobe
+Pass Readiness Probe         : <IP>:8090/passreadinessprobe
+Telnet                       : <IP>:8090/telnet?uri=<ServiceIP:ServicePort> 
+Prometheus Metrics           : <IP>:2112/metrics
+```
 
 # Windows Tcp Client Server Deployment
 
