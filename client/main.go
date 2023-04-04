@@ -21,6 +21,8 @@ import (
 var allFailedCons map[int][]util.ConnInfo // Stores entire failed info
 var failedCons *failedConnsStruct         // Stores failed info for each iteration
 var serverInfoMap *sync.Map
+var disableKeepAlive bool
+var keepAliveTimeOut int
 
 type failedConnsStruct struct {
 	failedCons []util.ConnInfo
@@ -193,8 +195,8 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 
 func invokeTcpClient(proto, address string, conns, iter int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
-	disableKeepAlive, _ := strconv.ParseBool(args[util.AtribDisableKeepAlive])
-	keepAliveTimeOut, _ := strconv.Atoi(args[util.AtribTimeoutKeepAlive])
+	disableKeepAlive, _ = strconv.ParseBool(args[util.AtribDisableKeepAlive])
+	keepAliveTimeOut, _ = strconv.Atoi(args[util.AtribTimeoutKeepAlive])
 
 	var connMap = make(map[string]net.Conn)
 
@@ -335,6 +337,10 @@ func startTcpClient(clientName, remoteAddr string, c net.Conn, args map[string]s
 			return
 		}
 		msgSent := clientName + "- Req-" + strconv.Itoa(i) + "\n"
+		if i == 1 {
+			msgSent = fmt.Sprintf("dka:%t,tka:%d|%s", disableKeepAlive, keepAliveTimeOut, msgSent)
+			log.Println("Initial packet sent: ", msgSent)
+		}
 		_, sendErr := c.Write([]byte(msgSent))
 		if sendErr != nil {
 			if strings.Contains(sendErr.Error(), util.ErrMsgListenClosed) {

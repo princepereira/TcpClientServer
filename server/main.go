@@ -202,9 +202,9 @@ func startHttpHandler() {
 	http.HandleFunc("/toggleprobe", toggleProbeHandler)
 	log.Println("Toggle Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/failreadinessprobe", failReadinessProbeHandler)
-	log.Println("Fail Redainess Probe started on port : ", util.HttpPort)
+	log.Println("Fail Readiness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/passreadinessprobe", passReadinessProbeHandler)
-	log.Println("Pass Redainess Probe started on port : ", util.HttpPort)
+	log.Println("Pass Readiness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/telnet", telnetHandler)
 	log.Println("Telnet handler started on port : ", util.HttpPort)
 	http.HandleFunc("/list", apiListHandler)
@@ -295,6 +295,41 @@ func invokeTcpServer(proto, address, serverInfo string) {
 
 }
 
+func setKeepAlive(c net.Conn, msg string) {
+
+	strSplit := strings.Split(msg, "|")
+	if len(strSplit) < 2 {
+		return
+	}
+
+	tc, ok := c.(*net.TCPConn)
+	if !ok {
+		return
+	}
+
+	strSplit = strings.Split(strSplit[0], ",")
+	for _, v := range strSplit {
+		kvs := strings.Split(v, ":")
+		if len(kvs) < 2 {
+			continue
+		}
+		if strings.Contains(v, "dka") {
+			dka, _ := strconv.ParseBool(kvs[1])
+			tc.SetKeepAlive(!dka)
+			fmt.Println("Setting Disable Keep Alive :", dka)
+			if dka {
+				return
+			}
+		}
+		if strings.Contains(v, "tka") {
+			tka, _ := strconv.Atoi(kvs[1])
+			keepAliveTimeOutInt := time.Duration(tka) * time.Millisecond
+			tc.SetKeepAlivePeriod(keepAliveTimeOutInt)
+			fmt.Println("Setting Keep Alive Timeout :", tka)
+		}
+	}
+}
+
 func handleTcpConnection(conn net.Conn, serverInfo string) {
 	// Replacing for now
 	hostName, _ := os.Hostname()
@@ -305,9 +340,15 @@ func handleTcpConnection(conn net.Conn, serverInfo string) {
 	s := bufio.NewScanner(conn)
 	var msgSent, receivedMsg string
 	var sendError error
+	firstPacket := true
+
 	for s.Scan() {
 		receivedMsg = s.Text()
 		log.Print("-> ", string(receivedMsg))
+		if firstPacket && strings.Contains(receivedMsg, "dka") {
+			setKeepAlive(conn, receivedMsg)
+			firstPacket = false
+		}
 		msgSent = constructServerResp(receivedMsg, serverInfo)
 		_, sendError = conn.Write([]byte(msgSent))
 		if sendError != nil {
