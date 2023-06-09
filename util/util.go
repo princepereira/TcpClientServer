@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v04.04.2023"
+	Version                  = "v09.06.2023"
 	MaxDropPackets           = 100
 	HttpPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -29,6 +29,8 @@ const (
 	AtribHelp                   = "-h"
 	AtribIpAddr                 = "-i"
 	AtribPort                   = "-p"
+	AtribSrcPort                = "-sp"
+	AtribSrcIP                  = "-si"
 	AtribCons                   = "-c"
 	AtribReqs                   = "-r"
 	AtribDelay                  = "-d"
@@ -47,6 +49,8 @@ var argKeys = map[string]bool{
 	AtribHelp:                   true,
 	AtribIpAddr:                 true,
 	AtribPort:                   true,
+	AtribSrcPort:                true,
+	AtribSrcIP:                  true,
 	AtribCons:                   true,
 	AtribReqs:                   true,
 	AtribDelay:                  true,
@@ -81,6 +85,7 @@ const (
 	DefaultTimeoutPrestopWait     = "5"
 	DefaultTimeoutApplicationWait = "15"
 	DefaultIterations             = "1"
+	DefaultSrcPort                = "-1"
 )
 
 type ConnInfo struct {
@@ -121,10 +126,17 @@ func PrintClientBanner(config map[string]string) {
 	log.Printf("#         Version          : %s          \n", Version)
 	if strings.Contains(config[AtribIpAddr], ":") {
 		// printing ipv6 host
-		log.Printf("#         Host             : [%s]:%s               \n", config[AtribIpAddr], config[AtribPort])
+		log.Printf("#         Target Host      : [%s]:%s               \n", config[AtribIpAddr], config[AtribPort])
 	} else {
 		// printing ipv4 host
-		log.Printf("#         Host             : %s:%s               \n", config[AtribIpAddr], config[AtribPort])
+		log.Printf("#         Target Host      : %s:%s               \n", config[AtribIpAddr], config[AtribPort])
+	}
+	if p, ok := config[AtribSrcPort]; ok && p != "-1" {
+		if strings.Contains(config[AtribSrcIP], ":") {
+			log.Printf("#         Source Host      : [%s]:%s                  \n", config[AtribSrcIP], p)
+		} else {
+			log.Printf("#         Source Host      : %s:%s                  \n", config[AtribSrcIP], p)
+		}
 	}
 	log.Printf("#         Connections      : %s                  \n", config[AtribCons])
 	log.Printf("#         Reqs/Cons        : %s                  \n", config[AtribReqs])
@@ -156,6 +168,7 @@ func ValidateArgs() (map[string]string, error) {
 	var args = make(map[string]string)
 
 	args[AtribProto] = DefaultProto
+	args[AtribSrcPort] = DefaultSrcPort
 	args[AtribDisableKeepAlive] = DefaultDisableKeepAlive
 	args[AtribTimeoutKeepAlive] = DefaultTimeoutKeepAlive
 	args[AtribTimeoutPrestopWait] = DefaultTimeoutPrestopWait
@@ -213,7 +226,6 @@ func isValidBool(val string) bool {
 }
 
 func ValidateValues(cs string, args map[string]string) error {
-
 	if _, err := strconv.Atoi(args[AtribPort]); err != nil {
 		return fmt.Errorf("port (%s) should be a number. Error : %v", args[AtribPort], err)
 	}
@@ -247,6 +259,13 @@ func ValidateValues(cs string, args map[string]string) error {
 	if _, err := strconv.Atoi(args[AtribIterations]); err != nil {
 		return fmt.Errorf("iterations (%s) should be a number. Error : %v", args[AtribIterations], err)
 	}
+	srcPort, err := strconv.Atoi(args[AtribSrcPort])
+	if err != nil {
+		return fmt.Errorf("source port (%s) should be a number. Error : %v", args[AtribSrcPort], err)
+	}
+	if _, ok := args[AtribSrcIP]; srcPort > 0 && !ok {
+		return fmt.Errorf("source ip needs to be specified if source port is specified")
+	}
 	return nil
 }
 
@@ -260,6 +279,8 @@ func ClientHelp() {
 	str = str + "   -c   : (*) Number of clients/threads/connections \n"
 	str = str + "   -r   : (*) Number of requests per connection \n"
 	str = str + "   -d   : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds) \n"
+	str = str + "   -sp  :     Source port to be chosen for client connections. Mandatory to provide Source Ip (-si) as well if this option is specified \n"
+	str = str + "   -si  :     Source IP to be chosen for client connections. Only valid if Source Port is specified \n"
 	str = str + "   -it  :     Number of iterations. Default: 1 \n"
 	str = str + "   -pr  :     Proto used. Options: TCP/UDP. Default: TCP \n"
 	str = str + "   -mdt :     MaxDropThreshold. Max time wait before consecutive drops \n"

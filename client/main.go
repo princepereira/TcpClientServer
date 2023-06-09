@@ -171,7 +171,15 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 			continue
 		}
 
-		c, err := net.DialUDP(proto, nil, udpServer)
+		var clientAddr *net.UDPAddr
+
+		srcPort, _ := strconv.Atoi(args[util.AtribSrcPort])
+		if srcPort > 0 {
+			localIP := net.ParseIP(args[util.AtribSrcIP])
+			clientAddr = &net.UDPAddr{IP: localIP, Port: srcPort}
+		}
+
+		c, err := net.DialUDP(proto, clientAddr, udpServer)
 		if err != nil {
 			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, nil, false)
 			continue
@@ -193,6 +201,30 @@ func invokeUdpClient(proto, address string, conns, iter int, args map[string]str
 	wg.Wait()
 }
 
+// DialTimeout acts like Dial but takes a timeout.
+//
+// The timeout includes name resolution, if required.
+// When using TCP, and the host in the address parameter resolves to
+// multiple IP addresses, the timeout is spread over each consecutive
+// dial, such that each is given an appropriate fraction of the time
+// to connect.
+//
+// See func Dial for a description of the network and address
+// parameters.
+// This is overriden method
+// If the src port to chosen is random port from TCP-IP stack, then pass -1
+func DialTimeout(network, address, localIpStr string, timeout time.Duration, port int) (net.Conn, error) {
+	var d net.Dialer
+	if port > 0 {
+		localIP := net.ParseIP(localIpStr)
+		localAddr := &net.TCPAddr{IP: localIP, Port: port}
+		d = net.Dialer{Timeout: timeout, LocalAddr: localAddr}
+	} else {
+		d = net.Dialer{Timeout: timeout}
+	}
+	return d.Dial(network, address)
+}
+
 func invokeTcpClient(proto, address string, conns, iter int, args map[string]string, wg *sync.WaitGroup, ctx context.Context) {
 
 	disableKeepAlive, _ = strconv.ParseBool(args[util.AtribDisableKeepAlive])
@@ -210,8 +242,8 @@ func invokeTcpClient(proto, address string, conns, iter int, args map[string]str
 		}
 
 		clientName := util.GetClientName(proto, iter, i)
-
-		c, err := net.DialTimeout(proto, address, util.DialTimeout)
+		srcPort, _ := strconv.Atoi(args[util.AtribSrcPort])
+		c, err := DialTimeout(proto, address, args[util.AtribSrcIP], util.DialTimeout, srcPort)
 		if err != nil {
 			storeConnFailure(clientName, address, "", err.Error(), i, 0, nil, nil, false)
 			continue
