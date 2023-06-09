@@ -75,6 +75,7 @@ func apiListHandler(w http.ResponseWriter, req *http.Request) {
 	str := "APIs Supported : \n"
 	str = str + "  <IP>:8090/list \n"
 	str = str + "  <IP>:8090/kill \n"
+	str = str + "  <IP>:8090/healthz \n"
 	str = str + "  <IP>:8090/readiness \n"
 	str = str + "  <IP>:8090/liveness \n"
 	str = str + "  <IP>:8090/toggleprobe \n"
@@ -108,6 +109,18 @@ func passReadinessProbeHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	log.Printf("ReadinessProbe will fail : %v", util.FailReadinessProbe)
 	fmt.Fprintf(w, "ReadinessProbe will fail : %v", util.FailReadinessProbe)
+}
+
+func connectBingHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Health outbound handler called ...")
+	_, err := http.Get("http://www.bing.com")
+	if err != nil {
+		log.Printf("Health outbound failed ...")
+		sendFailedStatus(w, "www.bing.com failed")
+		return
+	}
+	fmt.Fprintf(w, "Health outbound passed")
+	log.Printf("Health outbound passed...")
 }
 
 func readinessProbeHandler(w http.ResponseWriter, req *http.Request) {
@@ -196,6 +209,8 @@ func startHttpHandler() {
 	http.HandleFunc("/kill", preStopHandler)
 	log.Println("PreStopHandler started on port : ", util.HttpPort)
 	http.HandleFunc("/readiness", readinessProbeHandler)
+	log.Println("Health outbound Probe started on port : ", util.HttpPort)
+	http.HandleFunc("/healthz", connectBingHandler)
 	log.Println("Readiness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/liveness", livenessProbeHandler)
 	log.Println("Liveness Probe started on port : ", util.HttpPort)

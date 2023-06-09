@@ -1,4 +1,6 @@
+# Windows2019
 FROM mcr.microsoft.com/windows/nanoserver:1809
+# FROM mcr.microsoft.com/windows/nanoserver:ltsc2019
 USER ContainerAdministrator
 RUN cd C:
 RUN setx /M PATH "%PATH%;C:/"
