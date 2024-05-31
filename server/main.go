@@ -354,22 +354,18 @@ func invokeTcpServer(proto, address, serverInfo string) {
 		log.Println("TCP Client Connection Established... ", conn.RemoteAddr())
 		conn.Write([]byte(">"))
 		tcpConnCache.add(conn.RemoteAddr().String(), conn)
-		addConnectionsToConnectionMetrics(util.ConstTCP, address, conn)
 		go handleTcpConnection(conn, serverInfo)
 	}
 
 }
 
-func addConnectionsToConnectionMetrics(proto, address string, conn net.Conn) {
+func addConnectionsToConnectionMetrics(proto string, conn net.Conn) {
 	localAddr := conn.LocalAddr().String()
-	if !strings.Contains(localAddr, address) {
-		return
-	}
 	remoteAddr := conn.RemoteAddr().String()
 	ip, _, err := net.SplitHostPort(remoteAddr)
 	if err == nil {
 		connectionMetrics[proto].IPAddresses[ip] = true
-		connectionMetrics[proto].IPPorts[remoteAddr] = true
+		connectionMetrics[proto].IPPorts[fmt.Sprintf("%s-%s", remoteAddr, localAddr)] = true
 	}
 }
 
@@ -424,6 +420,7 @@ func handleTcpConnection(conn net.Conn, serverInfo string) {
 		receivedMsg = s.Text()
 		log.Print("-> ", string(receivedMsg))
 		if firstPacket && strings.Contains(receivedMsg, "dka") {
+			addConnectionsToConnectionMetrics(util.ConstTCP, conn)
 			setKeepAlive(conn, receivedMsg)
 			firstPacket = false
 		}

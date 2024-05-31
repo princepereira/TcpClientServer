@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v31.05.2024"
+	Version                  = "v01.06.2024"
 	MaxDropPackets           = 100
 	HttpPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -100,7 +100,7 @@ type ConnInfo struct {
 
 type Metrics struct {
 	IPAddresses []string `json:"ip_addresses,omitempty"`
-	IPPorts     []string `json:"ip_ports,omitempty"`
+	IPPorts     []string `json:"connections,omitempty"`
 }
 
 type ConnectionMetrics struct {
