@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version                  = "v09.06.2023"
+	Version                  = "v31.05.2024"
 	MaxDropPackets           = 100
 	HttpPort                 = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
@@ -96,6 +96,16 @@ type ConnInfo struct {
 	RequestInfo   string `json:",omitempty"`
 	FailedReason  string `json:",omitempty"`
 	FailedTime    string `json:",omitempty"`
+}
+
+type Metrics struct {
+	IPAddresses []string `json:"ip_addresses,omitempty"`
+	IPPorts     []string `json:"ip_ports,omitempty"`
+}
+
+type ConnectionMetrics struct {
+	TCP Metrics `json:"tcp,omitempty"`
+	UDP Metrics `json:"udp,omitempty"`
 }
 
 func PrintServerBanner(config map[string]string) {

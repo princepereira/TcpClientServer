@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -13,6 +14,11 @@ import (
 	"sync"
 	"time"
 )
+
+type ConnectionMetrics struct {
+	IPAddresses map[string]bool
+	IPPorts     map[string]bool
+}
 
 type tcpConnStruct struct {
 	conns map[string]net.Conn
@@ -26,6 +32,10 @@ type udpConnStruct struct {
 
 var tcpConnCache = tcpConnStruct{conns: make(map[string]net.Conn), mutex: &sync.Mutex{}}
 var udpConnCache = udpConnStruct{conns: make(map[string]*net.UDPAddr), mutex: &sync.Mutex{}}
+var connectionMetrics = map[string]ConnectionMetrics{
+	util.ConstTCP: {IPAddresses: make(map[string]bool), IPPorts: make(map[string]bool)},
+	util.ConstUDP: {IPAddresses: make(map[string]bool), IPPorts: make(map[string]bool)},
+}
 
 var listener net.Listener
 var udpListener *net.UDPConn
@@ -76,6 +86,8 @@ func apiListHandler(w http.ResponseWriter, req *http.Request) {
 	str = str + "  <IP>:8090/list \n"
 	str = str + "  <IP>:8090/kill \n"
 	str = str + "  <IP>:8090/healthz \n"
+	str = str + "  <IP>:8090/metrics \n"
+	str = str + "  <IP>:8090/resetmetrics \n"
 	str = str + "  <IP>:8090/readiness \n"
 	str = str + "  <IP>:8090/liveness \n"
 	str = str + "  <IP>:8090/toggleprobe \n"
@@ -84,6 +96,39 @@ func apiListHandler(w http.ResponseWriter, req *http.Request) {
 	str = str + "  <IP>:2112/metrics \n"
 	str = str + "  <IP>:8090/telnet?uri=<ServiceIP:ServicePort> \n"
 	fmt.Fprintln(w, str)
+}
+
+func resetConnectionMetricsHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Reset Connection Metrics Handler called ...")
+	connectionMetrics = map[string]ConnectionMetrics{
+		util.ConstTCP: {IPAddresses: make(map[string]bool), IPPorts: make(map[string]bool)},
+		util.ConstUDP: {IPAddresses: make(map[string]bool), IPPorts: make(map[string]bool)},
+	}
+	fmt.Fprintf(w, "connection metrics are reset\n")
+}
+
+func readConnectionMetricsHandler(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Read Connection Metrics Handler called ...")
+	resp := util.ConnectionMetrics{}
+	if tcpConnections, ok := connectionMetrics[util.ConstTCP]; ok {
+		for ip := range tcpConnections.IPAddresses {
+			resp.TCP.IPAddresses = append(resp.TCP.IPAddresses, ip)
+		}
+		for ipPort := range tcpConnections.IPPorts {
+			resp.TCP.IPPorts = append(resp.TCP.IPPorts, ipPort)
+		}
+	}
+	if udpConnections, ok := connectionMetrics[util.ConstUDP]; ok {
+		for ip := range udpConnections.IPAddresses {
+			resp.UDP.IPAddresses = append(resp.TCP.IPAddresses, ip)
+		}
+		for ipPort := range udpConnections.IPPorts {
+			resp.UDP.IPPorts = append(resp.TCP.IPPorts, ipPort)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func toggleProbeHandler(w http.ResponseWriter, req *http.Request) {
@@ -211,6 +256,10 @@ func startHttpHandler() {
 	http.HandleFunc("/readiness", readinessProbeHandler)
 	log.Println("Health outbound Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/healthz", connectBingHandler)
+	log.Println("Connection metrics started on port : ", util.HttpPort)
+	http.HandleFunc("/metrics", readConnectionMetricsHandler)
+	log.Println("Reset connection metrics started on port : ", util.HttpPort)
+	http.HandleFunc("/resetmetrics", resetConnectionMetricsHandler)
 	log.Println("Readiness Probe started on port : ", util.HttpPort)
 	http.HandleFunc("/liveness", livenessProbeHandler)
 	log.Println("Liveness Probe started on port : ", util.HttpPort)
@@ -305,9 +354,23 @@ func invokeTcpServer(proto, address, serverInfo string) {
 		log.Println("TCP Client Connection Established... ", conn.RemoteAddr())
 		conn.Write([]byte(">"))
 		tcpConnCache.add(conn.RemoteAddr().String(), conn)
+		addConnectionsToConnectionMetrics(util.ConstTCP, address, conn)
 		go handleTcpConnection(conn, serverInfo)
 	}
 
+}
+
+func addConnectionsToConnectionMetrics(proto, address string, conn net.Conn) {
+	localAddr := conn.LocalAddr().String()
+	if !strings.Contains(localAddr, address) {
+		return
+	}
+	remoteAddr := conn.RemoteAddr().String()
+	ip, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil {
+		connectionMetrics[proto].IPAddresses[ip] = true
+		connectionMetrics[proto].IPPorts[remoteAddr] = true
+	}
 }
 
 func setKeepAlive(c net.Conn, msg string) {
