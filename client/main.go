@@ -85,6 +85,7 @@ func main() {
 	proto := args[util.AtribProto]
 	iter, _ := strconv.Atoi(args[util.AtribIterations])
 	util.SetMaxDropThreshold(args[util.AtribMaxDropThreshold])
+	enableMetrics, _ := strconv.ParseBool(args[util.AtribEnableMetrics])
 
 	wg := new(sync.WaitGroup)
 
@@ -93,7 +94,6 @@ func main() {
 	chanSignal := make(chan os.Signal, 1)
 	signal.Notify(chanSignal, os.Interrupt, syscall.SIGTERM)
 	go handleCtrlC(chanSignal, cancel)
-	go util.StartPrometheus()
 
 	var address string
 
@@ -104,7 +104,10 @@ func main() {
 		address = fmt.Sprintf("%s:%s", args[util.AtribIpAddr], args[util.AtribPort])
 	}
 
-	util.PublishConnStatusToPrometheus(0, 0, 0, 0)
+	if enableMetrics {
+		util.HttpPushMetrics(util.ConstructDefaultMetric())
+	}
+
 	allFailedCons = make(map[int][]util.ConnInfo)
 
 	for turn := 1; turn <= iter && util.NoExitClient; turn++ {
@@ -113,7 +116,12 @@ func main() {
 		failedCons = &failedConnsStruct{failedCons: make([]util.ConnInfo, 0), mutex: &sync.Mutex{}}
 
 		log.Printf("\n\n######=========  ITERATION : %d STARTED =========######\n\n", turn)
-		util.PublishConnStatusToPrometheus(conns, 0, 0, turn)
+
+		startTS := time.Now()
+		var metric *util.Metric
+		if enableMetrics {
+			metric = util.ConstructMetric(args, turn, startTS.Format(time.RFC3339))
+		}
 
 		switch proto {
 		case util.ConstTCP:
@@ -130,7 +138,10 @@ func main() {
 		passedConnCount := conns - failedConnCount
 		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d \n", passedConnCount, failedConnCount, turn)
 
-		util.PublishConnStatusToPrometheus(conns, passedConnCount, failedConnCount, turn)
+		if enableMetrics {
+			util.UpdateMetricResult(metric, startTS, passedConnCount, failedConnCount)
+			util.HttpPushMetrics(metric)
+		}
 
 		if failedConnCount != 0 {
 			str := fmt.Sprintf("\n#======= Iteration : %d, No: of failed connections : %d", turn, failedConnCount)

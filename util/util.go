@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	Version                  = "v01.06.2024"
+	Version                  = "v19.06.2024"
 	MaxDropPackets           = 100
 	HttpPort                 = 8090
+	HttpPrometheusPort       = 8090
 	ErrMsgConnForciblyClosed = "An existing connection was forcibly closed by the remote host"
 	ErrMsgConnAborted        = "An established connection was aborted"
 	ErrMsgEOF                = "EOF"
@@ -23,6 +24,7 @@ const (
 	ConnTerminatedSuccessMsg = "#####====== Connection graceful exit. "
 	ConnTerminatedFailedMsg  = "#####====== Connection failed exit. "
 	ConnTerminatedMsg        = " #=== Connection terminated."
+	ErrorNotImplemented      = "Not Implemented"
 )
 
 const (
@@ -36,6 +38,7 @@ const (
 	AtribDelay                  = "-d"
 	AtribProto                  = "-pr"
 	AtribDisableKeepAlive       = "-dka"
+	AtribEnableMetrics          = "-em"
 	AtribTimeoutKeepAlive       = "-tka"
 	AtribTimeoutPrestopWait     = "-swt"
 	AtribTimeoutApplicationWait = "-awt"
@@ -56,6 +59,7 @@ var argKeys = map[string]bool{
 	AtribDelay:                  true,
 	AtribProto:                  true,
 	AtribDisableKeepAlive:       true,
+	AtribEnableMetrics:          true,
 	AtribTimeoutKeepAlive:       true,
 	AtribIterations:             true,
 	AtribTimeoutPrestopWait:     true,
@@ -81,6 +85,7 @@ const (
 	ConstAll                      = "all"
 	DefaultProto                  = ConstTCP
 	DefaultDisableKeepAlive       = ConstFalse
+	DefaultDisableMetrics         = ConstFalse
 	DefaultTimeoutKeepAlive       = "15000"
 	DefaultTimeoutPrestopWait     = "5"
 	DefaultTimeoutApplicationWait = "15"
@@ -157,6 +162,7 @@ func PrintClientBanner(config map[string]string) {
 		log.Printf("#         DisableKeepAlive : %s                  \n", config[AtribDisableKeepAlive])
 		log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
 	}
+	log.Printf("#         MetricsEnabled   : %s                  \n", config[AtribEnableMetrics])
 	log.Println("#===========================================#")
 	log.Println(" ")
 }
@@ -180,6 +186,7 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribProto] = DefaultProto
 	args[AtribSrcPort] = DefaultSrcPort
 	args[AtribDisableKeepAlive] = DefaultDisableKeepAlive
+	args[AtribEnableMetrics] = DefaultDisableMetrics
 	args[AtribTimeoutKeepAlive] = DefaultTimeoutKeepAlive
 	args[AtribTimeoutPrestopWait] = DefaultTimeoutPrestopWait
 	args[AtribTimeoutApplicationWait] = DefaultTimeoutApplicationWait
@@ -252,10 +259,13 @@ func ValidateValues(cs string, args map[string]string) error {
 		return fmt.Errorf("proto (%s) should be TCP/UDP", args[AtribProto])
 	}
 	if val := args[AtribDisableKeepAlive]; !isValidBool(val) {
-		return fmt.Errorf("DisableKeepAlive (%s) should be True/False", args[AtribProto])
+		return fmt.Errorf("DisableKeepAlive (%s) should be True/False", args[AtribDisableKeepAlive])
 	}
 	if _, err := strconv.Atoi(args[AtribTimeoutKeepAlive]); err != nil {
 		return fmt.Errorf("TimeoutKeepAlive (%s) should be a number. Error : %v", args[AtribTimeoutKeepAlive], err)
+	}
+	if val := args[AtribEnableMetrics]; !isValidBool(val) {
+		return fmt.Errorf("AtribEnableMetrics (%s) should be True/False", args[AtribEnableMetrics])
 	}
 	if _, err := strconv.Atoi(args[AtribTimeoutPrestopWait]); err != nil {
 		return fmt.Errorf("TimeoutPrestopWait (%s) should be a number. Error : %v", args[AtribTimeoutPrestopWait], err)
@@ -296,6 +306,7 @@ func ClientHelp() {
 	str = str + "   -mdt :     MaxDropThreshold. Max time wait before consecutive drops \n"
 	str = str + "   -dka :     Disable KeepAlive. Options: True/False. Default: False \n"
 	str = str + "   -tka :     KeepAlive Time in milliseconds. Default: 15 seconds \n"
+	str = str + "   -em  :     Enable prometheus metrics. Default: False \n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
 }
