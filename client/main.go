@@ -23,6 +23,8 @@ var failedCons *failedConnsStruct         // Stores failed info for each iterati
 var serverInfoMap *sync.Map
 var disableKeepAlive bool
 var keepAliveTimeOut int
+var resultFilePath string // If the flag is not empty, then it stores the path to result file.
+var testcaseName string   // If the flag is not empty, then it stores the name of the test.
 
 type failedConnsStruct struct {
 	failedCons []util.ConnInfo
@@ -86,6 +88,13 @@ func main() {
 	iter, _ := strconv.Atoi(args[util.AtribIterations])
 	util.SetMaxDropThreshold(args[util.AtribMaxDropThreshold])
 	enableMetrics, _ := strconv.ParseBool(args[util.AtribEnableMetrics])
+	resultFilePath = args[util.AtribOutFile]
+	testcaseName = args[util.AtribTestName]
+
+	if resultFilePath != util.ConstEmpty {
+		// remove the file if it exists
+		util.RemoveResultFile(resultFilePath)
+	}
 
 	wg := new(sync.WaitGroup)
 
@@ -136,7 +145,11 @@ func main() {
 
 		failedConnCount := failedCons.size()
 		passedConnCount := conns - failedConnCount
-		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d \n", passedConnCount, failedConnCount, turn)
+		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d , resultFilePath : %v \n", passedConnCount, failedConnCount, turn, resultFilePath)
+
+		if resultFilePath != util.ConstEmpty {
+			util.SaveResultToFile(conns, passedConnCount, failedConnCount, turn, testcaseName, resultFilePath)
+		}
 
 		if enableMetrics {
 			util.UpdateMetricResult(metric, startTS, passedConnCount, failedConnCount)

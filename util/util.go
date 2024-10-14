@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	Version                  = "v19.06.2024"
+	Version                  = "v16.10.2024"
 	MaxDropPackets           = 100
 	HttpPort                 = 8090
 	HttpPrometheusPort       = 8090
@@ -46,6 +47,8 @@ const (
 	AtribMaxDropThreshold       = "-mdt"
 	AtribServerInfo             = "ServerInfo"
 	AtribVersion                = "-v"
+	AtribOutFile                = "-file"
+	AtribTestName               = "-name"
 )
 
 var argKeys = map[string]bool{
@@ -66,6 +69,8 @@ var argKeys = map[string]bool{
 	AtribTimeoutApplicationWait: true,
 	AtribVersion:                true,
 	AtribMaxDropThreshold:       true,
+	AtribOutFile:                true,
+	AtribTestName:               true,
 }
 
 var (
@@ -78,6 +83,7 @@ var (
 )
 
 const (
+	ConstEmpty                    = ""
 	ConstFalse                    = "false"
 	ConstTrue                     = "true"
 	ConstTCP                      = "tcp"
@@ -111,6 +117,14 @@ type Metrics struct {
 type ConnectionMetrics struct {
 	TCP Metrics `json:"tcp,omitempty"`
 	UDP Metrics `json:"udp,omitempty"`
+}
+
+type ConnectionResult struct {
+	TestcaseName          string `json:"testcase_name"`
+	TotalConnections      int    `json:"total_connections"`
+	FailedConnections     int    `json:"failed_connections"`
+	SuccessfulConnections int    `json:"successful_connections"`
+	Iteration             int    `json:"iteration"`
 }
 
 func PrintServerBanner(config map[string]string) {
@@ -163,6 +177,12 @@ func PrintClientBanner(config map[string]string) {
 		log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
 	}
 	log.Printf("#         MetricsEnabled   : %s                  \n", config[AtribEnableMetrics])
+	if config[AtribOutFile] != ConstEmpty {
+		log.Printf("#         ResultFile       : %s                  \n", config[AtribOutFile])
+	}
+	if config[AtribTestName] != ConstEmpty {
+		log.Printf("#         TestcaseName     : %s                  \n", config[AtribTestName])
+	}
 	log.Println("#===========================================#")
 	log.Println(" ")
 }
@@ -192,6 +212,8 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribTimeoutApplicationWait] = DefaultTimeoutApplicationWait
 	args[AtribIterations] = DefaultIterations
 	args[AtribMaxDropThreshold] = strconv.Itoa(MaxDropThreshold)
+	args[AtribOutFile] = ConstEmpty
+	args[AtribTestName] = ConstEmpty
 
 	for i := 1; i < len(os.Args); i++ {
 
@@ -294,19 +316,21 @@ func ClientHelp() {
 	str = str + "Format : .\\client.exe -i <IP> -p <Port> -c <Number of Connections> -r <Number of Requests/Connection> -d <Delay (in ms) between each request> \n"
 	str = str + "\nEg : .\\client.exe -i 127.0.0.1 -p 4444 -c 1 -r 10000 -d 1 \n"
 	str = str + "\nParameters (Optional, Mandatory*): \n\n"
-	str = str + "   -i   : (*) IPv4/IPv6 Address of the server \n"
-	str = str + "   -p   : (*) Port number of the server \n"
-	str = str + "   -c   : (*) Number of clients/threads/connections \n"
-	str = str + "   -r   : (*) Number of requests per connection \n"
-	str = str + "   -d   : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds) \n"
-	str = str + "   -sp  :     Source port to be chosen for client connections. Mandatory to provide Source Ip (-si) as well if this option is specified \n"
-	str = str + "   -si  :     Source IP to be chosen for client connections. Only valid if Source Port is specified \n"
-	str = str + "   -it  :     Number of iterations. Default: 1 \n"
-	str = str + "   -pr  :     Proto used. Options: TCP/UDP. Default: TCP \n"
-	str = str + "   -mdt :     MaxDropThreshold. Max time wait before consecutive drops \n"
-	str = str + "   -dka :     Disable KeepAlive. Options: True/False. Default: False \n"
-	str = str + "   -tka :     KeepAlive Time in milliseconds. Default: 15 seconds \n"
-	str = str + "   -em  :     Enable prometheus metrics. Default: False \n"
+	str = str + "  -i    : (*) IPv4/IPv6 Address of the server \n"
+	str = str + "  -p    : (*) Port number of the server \n"
+	str = str + "  -c    : (*) Number of clients/threads/connections \n"
+	str = str + "  -r    : (*) Number of requests per connection \n"
+	str = str + "  -d    : (*) Delay/Sleep/Time between each request for a single connection (in milliseconds) \n"
+	str = str + "  -sp   :     Source port to be chosen for client connections. Mandatory to provide Source Ip (-si) as well if this option is specified \n"
+	str = str + "  -si   :     Source IP to be chosen for client connections. Only valid if Source Port is specified \n"
+	str = str + "  -it   :     Number of iterations. Default: 1 \n"
+	str = str + "  -pr   :     Proto used. Options: TCP/UDP. Default: TCP \n"
+	str = str + "  -mdt  :     MaxDropThreshold. Max time wait before consecutive drops \n"
+	str = str + "  -dka  :     Disable KeepAlive. Options: True/False. Default: False \n"
+	str = str + "  -tka  :     KeepAlive Time in milliseconds. Default: 15 seconds \n"
+	str = str + "  -em   :     Enable prometheus metrics. Default: False \n"
+	str = str + "  -file :     Set the file name to store the result \n"
+	str = str + "  -name :     Set the name of the testcase \n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
 }
@@ -365,4 +389,39 @@ func IsConnClosed(errMsg string) bool {
 		return true
 	}
 	return false
+}
+
+// SaveResultToFile : Save the result to a file
+func SaveResultToFile(total, succeeded, failed, iteration int, testcaseName, resultFilePath string) {
+	log.Printf("Saving the result of test %s to the file : %s\n", testcaseName, resultFilePath)
+	// Save the result to a file
+	connresult := ConnectionResult{
+		TestcaseName:          testcaseName,
+		TotalConnections:      total,
+		SuccessfulConnections: succeeded,
+		FailedConnections:     failed,
+		Iteration:             iteration,
+	}
+	jsonData, err := json.MarshalIndent(connresult, "", "  ")
+	if err != nil {
+		log.Println("Error in marshalling the result : ", err)
+		return
+	}
+	err = os.WriteFile(resultFilePath, jsonData, 0644)
+	if err != nil {
+		log.Println("Error in saving the result : ", err)
+		return
+	}
+	log.Printf("Result of test %s saved successfully to the file : %s\n", testcaseName, resultFilePath)
+}
+
+func RemoveResultFile(resultFilePath string) {
+	_, err := os.Stat(resultFilePath)
+	if os.IsNotExist(err) {
+		return
+	}
+	err = os.Remove(resultFilePath)
+	if err != nil {
+		log.Println("Error in removing the file : ", err)
+	}
 }
