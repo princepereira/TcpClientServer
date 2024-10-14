@@ -23,6 +23,7 @@ var failedCons *failedConnsStruct         // Stores failed info for each iterati
 var serverInfoMap *sync.Map
 var disableKeepAlive bool
 var keepAliveTimeOut int
+var saveResult bool // If the flag is enabled, then the result will be saved in the file result.json
 
 type failedConnsStruct struct {
 	failedCons []util.ConnInfo
@@ -86,6 +87,12 @@ func main() {
 	iter, _ := strconv.Atoi(args[util.AtribIterations])
 	util.SetMaxDropThreshold(args[util.AtribMaxDropThreshold])
 	enableMetrics, _ := strconv.ParseBool(args[util.AtribEnableMetrics])
+	saveResult, _ = strconv.ParseBool(args[util.AtribSaveResult])
+
+	if saveResult {
+		// remove the file if it exists
+		util.RemoveResultFile()
+	}
 
 	wg := new(sync.WaitGroup)
 
@@ -137,6 +144,10 @@ func main() {
 		failedConnCount := failedCons.size()
 		passedConnCount := conns - failedConnCount
 		fmt.Printf("\n\n\n#======= ConnectionsSucceded:%d, ConnectionsFailed:%d , Iteration:%d \n", passedConnCount, failedConnCount, turn)
+
+		if saveResult {
+			util.SaveResultToFile(conns, passedConnCount, failedConnCount, turn)
+		}
 
 		if enableMetrics {
 			util.UpdateMetricResult(metric, startTS, passedConnCount, failedConnCount)

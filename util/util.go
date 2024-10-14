@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	Version                  = "v19.06.2024"
+	Version                  = "v14.10.2024"
 	MaxDropPackets           = 100
 	HttpPort                 = 8090
 	HttpPrometheusPort       = 8090
@@ -25,6 +26,7 @@ const (
 	ConnTerminatedFailedMsg  = "#####====== Connection failed exit. "
 	ConnTerminatedMsg        = " #=== Connection terminated."
 	ErrorNotImplemented      = "Not Implemented"
+	ResultPath               = "result.json"
 )
 
 const (
@@ -46,6 +48,7 @@ const (
 	AtribMaxDropThreshold       = "-mdt"
 	AtribServerInfo             = "ServerInfo"
 	AtribVersion                = "-v"
+	AtribSaveResult             = "-sr"
 )
 
 var argKeys = map[string]bool{
@@ -66,6 +69,7 @@ var argKeys = map[string]bool{
 	AtribTimeoutApplicationWait: true,
 	AtribVersion:                true,
 	AtribMaxDropThreshold:       true,
+	AtribSaveResult:             true,
 }
 
 var (
@@ -111,6 +115,13 @@ type Metrics struct {
 type ConnectionMetrics struct {
 	TCP Metrics `json:"tcp,omitempty"`
 	UDP Metrics `json:"udp,omitempty"`
+}
+
+type ConnectionResult struct {
+	TotalConnections      int `json:"total_connections,omitempty"`
+	FailedConnections     int `json:"failed_connections,omitempty"`
+	SuccessfulConnections int `json:"successful_connections,omitempty"`
+	Iteration             int `json:"iteration,omitempty"`
 }
 
 func PrintServerBanner(config map[string]string) {
@@ -163,6 +174,7 @@ func PrintClientBanner(config map[string]string) {
 		log.Printf("#         TimeoutKeepAlive : %s                  \n", config[AtribTimeoutKeepAlive])
 	}
 	log.Printf("#         MetricsEnabled   : %s                  \n", config[AtribEnableMetrics])
+	log.Printf("#         SaveResult       : %s                  \n", config[AtribSaveResult])
 	log.Println("#===========================================#")
 	log.Println(" ")
 }
@@ -192,6 +204,7 @@ func ValidateArgs() (map[string]string, error) {
 	args[AtribTimeoutApplicationWait] = DefaultTimeoutApplicationWait
 	args[AtribIterations] = DefaultIterations
 	args[AtribMaxDropThreshold] = strconv.Itoa(MaxDropThreshold)
+	args[AtribSaveResult] = ConstFalse
 
 	for i := 1; i < len(os.Args); i++ {
 
@@ -261,6 +274,9 @@ func ValidateValues(cs string, args map[string]string) error {
 	if val := args[AtribDisableKeepAlive]; !isValidBool(val) {
 		return fmt.Errorf("DisableKeepAlive (%s) should be True/False", args[AtribDisableKeepAlive])
 	}
+	if val := args[AtribSaveResult]; !isValidBool(val) {
+		return fmt.Errorf("SaveResult (%s) should be True/False", args[AtribSaveResult])
+	}
 	if _, err := strconv.Atoi(args[AtribTimeoutKeepAlive]); err != nil {
 		return fmt.Errorf("TimeoutKeepAlive (%s) should be a number. Error : %v", args[AtribTimeoutKeepAlive], err)
 	}
@@ -307,6 +323,7 @@ func ClientHelp() {
 	str = str + "   -dka :     Disable KeepAlive. Options: True/False. Default: False \n"
 	str = str + "   -tka :     KeepAlive Time in milliseconds. Default: 15 seconds \n"
 	str = str + "   -em  :     Enable prometheus metrics. Default: False \n"
+	str = str + "   -sr  :     Enable this flag to save the result to .\result.json file. Default: False \n"
 	str = str + "\n#==============================#\n"
 	log.Println(str)
 }
@@ -365,4 +382,36 @@ func IsConnClosed(errMsg string) bool {
 		return true
 	}
 	return false
+}
+
+// SaveResultToFile : Save the result to a file
+func SaveResultToFile(total, succeeded, failed, iteration int) {
+	// Save the result to a file
+	connresult := ConnectionResult{
+		TotalConnections:      total,
+		SuccessfulConnections: succeeded,
+		FailedConnections:     failed,
+		Iteration:             iteration,
+	}
+	jsonData, err := json.MarshalIndent(connresult, "", "  ")
+	if err != nil {
+		log.Println("Error in marshalling the result : ", err)
+		return
+	}
+	err = os.WriteFile(ResultPath, jsonData, 0644)
+	if err != nil {
+		log.Println("Error in saving the result : ", err)
+		return
+	}
+}
+
+func RemoveResultFile() {
+	_, err := os.Stat(ResultPath)
+	if os.IsNotExist(err) {
+		return
+	}
+	err = os.Remove(ResultPath)
+	if err != nil {
+		log.Println("Error in removing the file : ", err)
+	}
 }
